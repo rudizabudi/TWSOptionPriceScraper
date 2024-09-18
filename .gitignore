@@ -1,0 +1,15 @@
+### Example user template template
+### Example user template
+
+# IntelliJ project files
+.idea
+*.iml
+out
+gen
+!/.env
+!/option_contracts.pkl
+!/stock_contracts.pkl
+!/expired_option_contracts.pkl
+!/main_test.py
+!/tester.py
+!/.venv/
