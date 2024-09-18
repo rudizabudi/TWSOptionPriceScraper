@@ -13,3 +13,9 @@ gen
 !/main_test.py
 !/tester.py
 !/.venv/
+/.env
+/expired_option_contracts.pkl
+/main_test.py
+/option_contracts.pkl
+/stock_contracts.pkl
+/tester.py
