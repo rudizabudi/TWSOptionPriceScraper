@@ -1,6 +1,7 @@
-from enum import Enum
+from datetime import datetime, timedelta
 from dotenv import load_dotenv
 import os
+
 
 class Core:
     def __init__(self):
@@ -16,29 +17,41 @@ class Core:
         self.sql_password: str = os.getenv('SQL_PASSWORD')
         self.connection_string: str = f'DRIVER={{ODBC Driver 17 for SQL Server}};SERVER={self.sql_server};UID={self.sql_user};PWD={self.sql_password}'
 
-        self.reqId_hashmap = {}
-        self.reqId_1 = 1
-        self.reqId_2 = 100_000_000
+        self.reqId_hashmap: dict = {}
+        self.reqId_1: int = 1
+        self.reqId_2: int = 100_000_000
 
-        self.underlying_list = self.underlyings()
+        self.underlying_list: dict[str, str] = self.underlyings()
 
-        #self.response_state = 0
+        self.contract_pool: dict[str, list[object]] = {
+                                                        'STK': [],
+                                                        'OPT': [],
+                                                        'EXP': []}
 
-        self.request_state = self.RequestState.WAITING
+        self.immediate_pool: list = []
+        self.ip_length: int = 10
 
-        self.contract_pool = {'STK': [],
-                              'OPT': [],
-                              'EXP': []}
+        self. writable_pool: list = []
 
-        self.immediate_pool = []
-        self.ip_length = 10
+        self.candle_length: str = '15 mins'  # candle length in minutes to build history. Legal units: 1 secs, 5 secs, 10 secs, 15 secs, 30 secs, 1 min, 2 mins, 3 mins, 5 mins, 10 mins, 15 mins, 20 mins, 30 mins, 1 hour, 2 hours, 3 hours, 4 hours, 8 hours, 1 day, 1W, 1M
 
-    class RequestState(Enum):
-        FAIL = -1
-        WAITING = 0
-        SUCCESS = 1
+        self.timeout_breaker: dict[int, int] = {4: 20, 8: 40, 26: 120, 52: 180, 9999: 300}
 
-    def underlyings(self):
+        self.insert_query_max_lines: int = 995
+
+        self.expired_opt_days = 3  # within this many days, an option is considered expired (inclusive)
+
+        #Scheduler times list[hour, minute]
+        self.stk_update_timer: list[int] = [18, 0]
+        self.exp_update_timer: list[int] = [22, 30]
+        self.stk_update_timer: datetime = datetime.today().replace(hour=self.stk_update_timer[0], minute=self.stk_update_timer[1], second=0, microsecond=0)
+        self.exp_update_timer: datetime = datetime.today().replace(hour=self.exp_update_timer[0], minute=self.exp_update_timer[1], second=0, microsecond=0)
+
+        self.timer_exclude_days: list[int] = [5, 6]
+        self.startup = True
+
+
+    def underlyings(self) -> dict[str, list[str]]:
         underlyings: dict = {'STK': ['USO', 'SPY', 'QQQ', 'IWM', 'GLD', 'TLT', 'IEF', 'LQD',
                                           'MMM', 'AOS', 'ABT', 'ABBV', 'ACN', 'ADBE', 'AMD', 'AES', 'AFL', 'A', 'APD', 'ABNB', 'AKAM', 'ALB', 'ARE', 'ALGN', 'ALLE', 'LNT',
                                           'ALL', 'GOOGL', 'GOOG', 'MO', 'AMZN', 'AMCR', 'AEE', 'AEP', 'AXP', 'AIG', 'AMT', 'AWK', 'AMP', 'AME', 'AMGN', 'APH',
@@ -98,3 +111,6 @@ class Core:
     def set_TWSCon(self, TWSCon):
         self.TWSCon = TWSCon
         print(123)
+
+def tprint(text: str = '', *args, **kwargs) -> str:
+    print(f'{datetime.now().strftime('%H:%M:%S')} : {text}')

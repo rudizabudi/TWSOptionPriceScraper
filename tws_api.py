@@ -1,10 +1,10 @@
-import threading
-from datetime import datetime
-
 from ibapi.client import EClient
 from ibapi.wrapper import EWrapper
+import threading
 
 import time
+
+from core import tprint
 
 class TWSCon(EWrapper, EClient):
 
@@ -21,15 +21,15 @@ class TWSCon(EWrapper, EClient):
         time.sleep(1)
 
     def connectAck(self):
-        print(datetime.now().strftime('%H:%M:%S') + ' : ', 'Connected.')
+        tprint('Connected.')
 
     def connectionClosed(self):
-        print(datetime.now().strftime('%H:%M:%S') + ' : ', 'Disconnected.')
+        tprint('Disconnected.')
 
     def error(self, reqId, errorCode, errorString):
-        # print(errorCode, errorString)
+        #print(errorCode, errorString)
         if errorCode in [162, 200]:
-            self.core.response_state = -1
+            self.core.reqId_hashmap[reqId].__self__.set_error_flag(flag=True)
 
     def historicalData(self, reqId, bar):
         if reqId not in self.core.reqId_hashmap.keys():
@@ -37,11 +37,10 @@ class TWSCon(EWrapper, EClient):
 
         self.core.reqId_hashmap[reqId]({bar.date: {'Open': bar.open, 'High': bar.high, 'Low': bar.low, 'Close': bar.close}})
 
-
     def historicalDataEnd(self, reqId: int, start: str, end: str):
         super().historicalDataEnd(reqId, start, end)
-        self.hde = True
-        # print("HistoricalDataEnd. ReqId:", reqId, "from", start, "to", end)
+        self.core.reqId_hashmap[reqId].__self__.set_historical_data_end(flag=True)
+
 
     def historicalTicksBidAsk(self, reqId, ticks, done):
         print('Ticks:', ticks)
@@ -52,7 +51,6 @@ class TWSCon(EWrapper, EClient):
             raise KeyError('ReqId not assigned to an security class instance.')
 
         self.core.reqId_hashmap[reqId](expiries=list(expirations) or [], strikes=list(strikes) or [])
-        self.core.response_state = 1
 
 
         # if reqId not in self.reqId_cache.keys():
@@ -71,5 +69,4 @@ class TWSCon(EWrapper, EClient):
             raise KeyError('ReqId not assigned to an security class instance.')
 
         self.core.reqId_hashmap[reqId](contractDetails.contract.conId)
-        self.core.response_state = 1
 

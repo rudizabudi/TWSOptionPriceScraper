@@ -1,8 +1,6 @@
-import pickle
-from datetime import datetime #TODO: Check if double imports across files are best practice
-
-import pyodbc
+from datetime import datetime
 from ibapi.contract import Contract
+import pyodbc
 
 
 class DatabaseBroker():
@@ -29,7 +27,8 @@ class DatabaseBroker():
 
             cursor: pyodbc.Cursor = sql_con.cursor()
             #print('Cursor opened')
-
+            # print('Args', args)
+            # print('Kwargs', kwargs)
             result = func(self, cursor = cursor, conn = sql_con, *args, **kwargs) or {}
 
             if isinstance(result, dict) and 'commit' in result.keys():
@@ -45,7 +44,7 @@ class DatabaseBroker():
         return con_wrapper
 
     @sql_query
-    def fetch_all_table_names(self, cursor: pyodbc.Cursor, db_name: str = None, **kwargs) -> dict:
+    def fetch_all_table_names(self, cursor: pyodbc.Cursor, db_name: str = None, return_data: bool = False, **kwargs) -> dict[None | dict[str, list[str]], bool]:
         """
             Fetches the names of all tables in the database.
 
@@ -77,7 +76,10 @@ class DatabaseBroker():
 
             self.table_structure[db] = [x[0] for x in cursor.fetchall()]
 
-        return {'data': [], 'commit': False}
+        if return_data:
+            return {'data': self.table_structure, 'commit': False}
+        else:
+            return {'data': [], 'commit': False}
 
     @sql_query
     def check_table_exists(self, cursor: pyodbc.Cursor, contract_container: "ContractContainer", create_missing: bool = True, **kwargs):
@@ -92,7 +94,6 @@ class DatabaseBroker():
          Returns:
              dict: A dictionary containing the latest update and a flag indicating if the operation needs to be committed.
          """
-
 
         if self.table_structure == {}:
             self.fetch_all_table_names()
@@ -110,17 +111,19 @@ class DatabaseBroker():
 
         if create_missing:
             if database_name not in self.table_structure.keys():
+                print(f'Create database {database_name}')
                 self.create_database(db_name=database_name)
                 self.fetch_all_table_names(database=database_name)
 
             if table_name not in self.table_structure[database_name]:
+                print(f'Create table {table_name}')
                 self.create_table(db_name=database_name, table_name=table_name)
                 self.fetch_all_table_names(database=database_name)
 
         return {'data': None, 'commit': False}
 
     @sql_query
-    def get_last_update(self, cursor: pyodbc.Cursor, contract_container: "ContractContainer" = None, **kwargs) -> dict:
+    def get_last_update(self, cursor: pyodbc.Cursor, contract_container: "ContractContainer", **kwargs) -> dict[datetime, bool]:
         """
         Fetches the latest update from the database for a given contract.
 
@@ -136,21 +139,19 @@ class DatabaseBroker():
             dict: A dictionary containing the latest update and a flag indicating if the operation was committed.
         """
 
-        contract = self.ContractContainer.get_contract()
-        database = self.ContractContainer.get_database()
+        contract = contract_container.get_contract()
+        database = contract_container.get_database()
+        table = contract_container.get_table()
         match contract.secType:
             case 'STK':
-                table_name = f'{contract.symbol}_STK'
                 query = f"""
                         SELECT MAX(date)
-                        FROM [{database}].[dbo].[{table_name}]
+                        FROM [{database}].[dbo].[{table}]
                         """
             case 'OPT':
-                expiry_date = datetime.strptime(contract.lastTradeDateOrContractMonth, '%Y%m%d').strftime('%d%b%y')
-                table_name = f'{contract.symbol}_OPT_{expiry_date}'
                 query = f"""
                         SELECT MAX(date)
-                        FROM [{database}].[dbo].[{table_name}]
+                        FROM [{database}].[dbo].[{table}]
                         WHERE strike = {contract.strike}
                         AND callput = '{contract.right}';
                         """
@@ -164,6 +165,23 @@ class DatabaseBroker():
         return {'data': last_update, 'commit': False}
 
     @sql_query
+    def get_last_price(self, cursor: pyodbc.Cursor, stk_symbol: str, **kwargs) -> float:
+        query = f"""
+                SELECT c
+                FROM [Data_STK].[dbo].[{f'{stk_symbol}_STK'}]
+                WHERE date = (
+                    SELECT max(date)
+                    FROM [Data_STK].[dbo].[{f'{stk_symbol}_STK'}]
+                    );
+                """
+        cursor.execute(query)
+
+        last_price = cursor.fetchone()
+        last_price = last_price[0] if last_price is not None else None
+
+        return {'data': last_price, 'commit': False}
+
+    @sql_query
     def create_database(self, cursor: pyodbc.Cursor, conn: pyodbc.Connection, db_name: str, **kwargs):
 
         conn.autocommit = True
@@ -172,7 +190,6 @@ class DatabaseBroker():
         conn.autocommit = False
 
         return {'data': True, 'commit': True}
-
 
     @sql_query
     def create_table(self, cursor: pyodbc.Cursor, db_name: str, table_name: str, **kwargs) -> dict:
@@ -206,53 +223,43 @@ class DatabaseBroker():
             case _:
                 raise KeyError('Security type not supported. Valid secTypes: STK, OPT')
         #print('Create table query: ', query)
-        #cursor.execute(query)
+        cursor.execute(query)
 
         return {'data': True, 'commit': True}
 
     @sql_query
-    def insert_data(self, cursor, contract_container: "ContractContainer" = None, **kwargs) -> dict: #TODO: FINISH!
+    def write_price_data(self, cursor, query_string: str, **kwargs):
+        if query_string:
+            cursor.execute(query_string)
 
-        contract = contract_container.get_contract()
-
-        self.check_contract_type(contract)
-
-        match contract.secType:
-            case 'STK':
-                table_name = f'{contract.symbol.replace(".", "")}_STK'
-                query = f"""INSERT INTO [{self.database}].[dbo].[{table_name}]
-                            VALUES (?, ?, ?, ?, ?)
-                        """
-            case 'OPT':
-                expiry_date = datetime.strptime(contract.lastTradeDateOrContractMonth, '%Y%m%d').strftime('%d%b%y')
-                table_name = f'{contract.symbol}_OPT_{expiry_date}'
-                query = f"""
-                    INSERT INTO [{self.database}].[dbo].[{table_name}]""" # T
+            return {'data': [], 'commit': True}
 
     @sql_query
-    def get_existing_dates(self, cursor, contract_container: "ContractContainer" = None, **kwargs) -> dict:
+    def get_existing_dates(self, cursor, contract_container: "ContractContainer" = None, **kwargs) -> dict[str: tuple[datetime], str: bool]:
 
         contract = contract_container.get_contract()
-
+        database = contract_container.get_database()
+        table = contract_container.get_table()
         match contract.secType:
             case 'STK':
-                table_name = f'{contract.symbol.replace(".", "")}_STK'
+                #
                 query = f"""
                     SELECT DISTINCT date
-                    FROM [{self.database}].[dbo].[{table_name}]
+                    FROM [{database}].[dbo].[{table}]
+                    ORDER BY date DESC;
                 """
             case 'OPT':
-                expiry_date = datetime.strptime(contract.lastTradeDateOrContractMonth, '%Y%m%d').strftime('%d%b%y')
-                table_name = f'{contract.symbol}_OPT_{expiry_date}'
                 query = f"""
                     SELECT DISTINCT date
-                    FROM [{self.database}].[dbo].[{table_name}]
+                    FROM [{database}].[dbo].[{table}]
+                    WHERE strike = {contract.strike}
+                    AND callput = '{contract.right}';
                 """
             case _:
                 raise KeyError('Security type not supported. Valid secTypes: STK, OPT')
 
         cursor.execute(query)
-        existing_dates = [x[0] for x in cursor.fetchall()] # List because of dynamic cursor
+        existing_dates = tuple(x[0] for x in cursor.fetchall()) # tuple because of dynamic cursor
 
         return {'data': existing_dates, 'commit': False}
 
