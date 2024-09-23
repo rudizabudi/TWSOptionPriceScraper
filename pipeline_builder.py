@@ -205,7 +205,7 @@ class PipelineBuilder:
                     last_update = self.db.get_last_update(contract_container=self.core.contract_pool['EXP'][0], response=True)
                     expiry = self.core.contract_pool['EXP'][0].get_expiry(dt_object=True)
 
-                    if (last_update and last_update < expiry + timedelta(hours=21, minutes=45)) or not last_update:
+                    if (last_update and last_update < expiry + timedelta(hours=21, minutes=45)) or not last_update: # TODO add timezones for global application
                         #tprint('Adding from EXP.')
                         self.db.check_table_exists(contract_container=self.core.contract_pool['EXP'][0], create_missing=True)
                         self.core.immediate_pool.append(self.core.contract_pool['EXP'].pop(0))
