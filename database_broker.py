@@ -192,7 +192,7 @@ class DatabaseBroker():
         return {'data': True, 'commit': True}
 
     @sql_query
-    def create_table(self, cursor: pyodbc.Cursor, db_name: str, table_name: str, **kwargs) -> dict:
+    def create_table(self, cursor: pyodbc.Cursor, db_name: str, table_name: str, **kwargs) -> dict[str: None, str: bool]:
 
         match table_name.count('_'):
             case 1: # STK
@@ -225,17 +225,17 @@ class DatabaseBroker():
         #print('Create table query: ', query)
         cursor.execute(query)
 
-        return {'data': True, 'commit': True}
+        return {'data': None, 'commit': True}
 
     @sql_query
-    def write_price_data(self, cursor, query_string: str, **kwargs):
+    def write_price_data(self, cursor, query_string: str, **kwargs) -> dict[str: None, str: bool]:
         if query_string:
             cursor.execute(query_string)
 
-            return {'data': [], 'commit': True}
+            return {'data': None, 'commit': True}
 
     @sql_query
-    def get_existing_dates(self, cursor, contract_container: "ContractContainer" = None, **kwargs) -> dict[str: tuple[datetime], str: bool]:
+    def get_existing_dates(self, cursor, contract_container: "ContractContainer" = None, **kwargs) -> dict[str: set[datetime], str: bool]:
 
         contract = contract_container.get_contract()
         database = contract_container.get_database()
@@ -259,7 +259,7 @@ class DatabaseBroker():
                 raise KeyError('Security type not supported. Valid secTypes: STK, OPT')
 
         cursor.execute(query)
-        existing_dates = tuple(x[0] for x in cursor.fetchall()) # tuple because of dynamic cursor
+        existing_dates = set(x[0] for x in cursor.fetchall())
 
         return {'data': existing_dates, 'commit': False}
 

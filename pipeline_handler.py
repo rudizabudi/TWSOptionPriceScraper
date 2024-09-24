@@ -166,8 +166,11 @@ class PipelineHandler:
         if not self.tws_con.isConnected():
             print('Disconnected 3456')
             while True:
+                print(1)
                 self.tws_con.connect(self.core.host_ip, self.core.api_port, self.core.client_id)
+                print(2)
                 sleep(10)
                 if self.tws_con.isConnected():
+                    print(3)
                     break
         return True

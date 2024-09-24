@@ -1,12 +1,13 @@
-from datetime import datetime, timedelta
+from datetime import datetime, time, timedelta
 import pickle
+import pyodbc
+import random
 from time import sleep
 from threading import Thread
 
 from contract_container import ContractContainer
 from core import tprint
 
-import pyodbc
 
 class PipelineBuilder:
     def __init__(self, core =None, tws_con=None, CC=None, DB=None):
@@ -39,9 +40,15 @@ class PipelineBuilder:
             tprint('Building option contracts...')
             for stk in self.core.contract_pool['STK']:
                 self.core.contract_pool['OPT'].extend(self.build_opt_contracts(stk=stk))
+
+            if self.core.randomize_opts:
+                random.shuffle(self.core.contract_pool['OPT'])
+                tprint(f'OPT contracts randomized.')
+
             tprint('Building option contracts ended.')
 
-        self.get_exp_options()
+        if datetime.now().time().hour < 22:
+            self.get_exp_options()
         self.option_exp_max_length = len(self.core.contract_pool['EXP'])
 
 
@@ -135,26 +142,29 @@ class PipelineBuilder:
         """
 
         tprint('Getting expired option contracts...')
-
-        expiries = [datetime.today().date() - timedelta(days=x) for x in range(self.core.expired_opt_days + 1)]
+        start = 0 if datetime.now().time() > time(22, 00) else 1
+        expiries = [datetime.today().date() - timedelta(days=x) for x in range(start, self.core.expired_opt_days + 1)]
         table_structure = self.db.fetch_all_table_names(return_data=True)
         databases = set(map(lambda x: f'Data_OPT_{x.strftime('%b%y')}', expiries))
 
-        tables = {}
+        expired_tables = {}
         for database in databases:
             for table in table_structure[database]:
                 if datetime.strptime(table.split('_')[2], '%d%b%y').date() in expiries:
-                    tables[table] = None
+                    expired_tables[table] = None
 
-        for table in tables.keys():
+        for table in expired_tables.keys():
             #last_price = self.db.get_last_price(stk_symbol=table.split('_')[0])
             stk_contract = list(filter(lambda x: x.get_symbol() == table.split('_')[0] and x.get_secType() == 'STK', self.core.contract_pool['STK']))
             if stk_contract is not None:
                 expiry = datetime.strptime(table.split('_')[2], '%d%b%y').date().strftime('%Y%m%d')
+                #tprint(f'Creating exp {expiry} opt contract for {stk_contract[0]}')
                 opt_contract = self.build_opt_contracts(stk=stk_contract[0], expiry=expiry)
                 self.core.contract_pool['EXP'].extend(opt_contract)
                 if opt_contract in self.core.contract_pool['OPT']:
                     self.core.contract_pool['OPT'].remove(opt_contract)
+
+        tprint('Getting expired option contracts ended.')
 
 
     def bit_to_insert(self): # TODO: Implement logical load vs rebuild logic
@@ -224,7 +234,7 @@ class PipelineBuilder:
                     #self.core.immediate_pool.append(self.core.contract_pool['STK'].pop(0))
                     self.stk_sorter_pointer += 1
 
-                elif len(self.core.contract_pool['OPT']) > 0:
+                elif self.core.contract_pool['OPT'] and len(self.core.contract_pool['OPT']) > 0:
                     self.db.check_table_exists(contract_container=self.core.contract_pool['OPT'][0], create_missing=True)
 
                     last_update = self.db.get_last_update(contract_container=self.core.contract_pool['OPT'][0], response=True)
@@ -245,7 +255,8 @@ class PipelineBuilder:
                             self.core.contract_pool['OPT'] = self.core.contract_pool['OPT'][1:].append(self.core.contract_pool['OPT'][0])
                             # TODO Find better solution
                     else:
-                        self.core.contract_pool['OPT'] = self.core.contract_pool['OPT'][1:] + self.core.contract_pool['OPT'][0]
+
+                        self.core.contract_pool['OPT'] = self.core.contract_pool['OPT'][1:].append(self.core.contract_pool['OPT'][0])
 
 
             if datetime.now().weekday() not in self.core.timer_exclude_days:
@@ -258,4 +269,4 @@ class PipelineBuilder:
                     self.get_exp_options()
                     self.option_exp_max_length = len(self.core.contract_pool['EXP'])
 
-                    self.core.opt_update_timer = datetime.now() + timedelta(days=1)
+                    self.core.exp_update_timer = datetime.now() + timedelta(days=1)

@@ -39,7 +39,7 @@ class Core:
 
         self.insert_query_max_lines: int = 995
 
-        self.expired_opt_days = 3  # within this many days, an option is considered expired (inclusive)
+        self.expired_opt_days = 2  # within this many days, an option is considered expired (inclusive)
 
         #Scheduler times list[hour, minute]
         self.stk_update_timer: list[int] = [18, 0]
@@ -49,6 +49,8 @@ class Core:
 
         self.timer_exclude_days: list[int] = [5, 6]
         self.startup = True
+
+        self.randomize_opts = True
 
 
     def underlyings(self) -> dict[str, list[str]]:
