@@ -50,9 +50,9 @@ class PipelineHandler:
                 duration = max(floor((datetime.now() - last_update) / timedelta(days=7) + 1), 1)
 
                 if duration > 52:
-                    durationStr = f'{ceil(duration / 52)} Y'
+                    duration_str = f'{ceil(duration / 52)} Y'
                 elif duration <= 52:
-                    durationStr = f'{duration} W'
+                    duration_str = f'{duration} W'
                 else:
                     raise Exception(f'Invalid duration: {duration}')
 
@@ -62,7 +62,7 @@ class PipelineHandler:
                 self.tws_con.reqHistoricalData( reqId=self.core.reqId_2,
                                                 contract=contract_instance.get_contract(),
                                                 endDateTime=query_time,
-                                                durationStr=durationStr,
+                                                durationStr=duration_str,
                                                 barSizeSetting=self.core.candle_length,
                                                 whatToShow="Bid_Ask",
                                                 useRTH=1,
@@ -78,7 +78,6 @@ class PipelineHandler:
 
                 while not contract_instance.get_error_flag() and not contract_instance.get_historical_data_end() and datetime.now() < time_breaker:
                     if datetime.now() >= time_breaker and self.tws_con.isConnected():
-                        #print(self.now_print(), 'ReqHistoricalData TimeBreaker.')
                         # TODO: reschedule contract a couple of positions later
                         sleep(.1)
                         break
@@ -109,6 +108,7 @@ class PipelineHandler:
             sleep(10)
 
         self.db = self.db(core=self.core, CC=self.ContractContainer)
+
         while True:
             try:
                 contract_instance = self.core.writable_pool[0]
@@ -128,7 +128,6 @@ class PipelineHandler:
                             """
 
                 iq_rows = []
-                # print(contract_instance.get_table(), existing_dates)
                 for i, (dt, ohlc) in enumerate(contract_instance.get_price_data().items(), start=1):
                     #TODO: Check if dt is already datetime object
                     if not existing_dates or datetime.strptime(dt, "%Y%m%d %H:%M:%S") not in existing_dates:
@@ -136,7 +135,7 @@ class PipelineHandler:
                             case 'STK':
                                 data_query = f"('{dt}', {ohlc['High']}, {ohlc['Low']}, {ohlc['Open']}, {ohlc['Close']})"
                             case 'OPT':
-                                security_identifier = f'{contract_instance.get_expiry(output_str_format='%d%b%y')}_{contract_instance.get_symbol()}_{contract_instance.get_strike()}_{contract_instance.get_right()}'
+                                security_identifier = f'{contract_instance.get_symbol()}_{contract_instance.get_strike()}_{contract_instance.get_right()}_{contract_instance.get_expiry(output_str_format='%d%b%y')}'
 
                                 data_query = f"('{dt}', '{security_identifier}', '{contract_instance.get_right()}', {contract_instance.get_strike()}, {ohlc['High']}, {ohlc['Low']}, {ohlc['Open']}, {ohlc['Close']})"
                             case _:
@@ -154,10 +153,14 @@ class PipelineHandler:
                         insert_query = iq_header + ','.join(str(x) for x in iq_rows[i * self.core.insert_query_max_lines:min(len(iq_rows), (i + 1) * self.core.insert_query_max_lines)]) + ';'
                         self.db.write_price_data(query_string=insert_query)
 
+                else:
+                    tprint(f'Writing no new price data for {contract_instance.get_symbol()} {contract_instance.get_secType()} to database {contract_instance.get_table()}.')
+
                 self.core.writable_pool.pop(0)
 
             except IndexError as err:
                 #tprint(f'IndexError 987 {err}')
+                #tprint(f'Self.core.writable_pool length:{len(self.core.writable_pool)}')
                 while len(self.core.writable_pool) == 0:
                     sleep(.1)
 

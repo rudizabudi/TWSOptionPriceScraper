@@ -165,7 +165,7 @@ class DatabaseBroker():
         return {'data': last_update, 'commit': False}
 
     @sql_query
-    def get_last_price(self, cursor: pyodbc.Cursor, stk_symbol: str, **kwargs) -> float:
+    def get_last_price(self, cursor: pyodbc.Cursor, stk_symbol: str, **kwargs) -> dict[str, bool | None]:
         query = f"""
                 SELECT c
                 FROM [Data_STK].[dbo].[{f'{stk_symbol}_STK'}]
@@ -265,7 +265,7 @@ class DatabaseBroker():
 
     @staticmethod
     def check_contract_type(contract):
-        if not isinstance(contract, ContractContainer):
+        if not isinstance(contract, "ContractContainer"):
             raise TypeError('Contract must be an instance of the contract class.')
 
 

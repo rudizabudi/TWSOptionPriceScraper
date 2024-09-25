@@ -158,7 +158,6 @@ class PipelineBuilder:
             stk_contract = list(filter(lambda x: x.get_symbol() == table.split('_')[0] and x.get_secType() == 'STK', self.core.contract_pool['STK']))
             if stk_contract is not None:
                 expiry = datetime.strptime(table.split('_')[2], '%d%b%y').date().strftime('%Y%m%d')
-                #tprint(f'Creating exp {expiry} opt contract for {stk_contract[0]}')
                 opt_contract = self.build_opt_contracts(stk=stk_contract[0], expiry=expiry)
                 self.core.contract_pool['EXP'].extend(opt_contract)
                 if opt_contract in self.core.contract_pool['OPT']:
@@ -208,9 +207,8 @@ class PipelineBuilder:
                 pass
 
             while len(self.core.immediate_pool) < self.core.ip_length:
-                # immediate_pool fill priority logic defined by of if/elif/else order
+
                 if len(self.core.contract_pool['EXP']) > 0:
-                    #tprint(f'{last_update} {(last_update < expiry + timedelta(hours=21, minutes=45))} {update_needed}')
 
                     last_update = self.db.get_last_update(contract_container=self.core.contract_pool['EXP'][0], response=True)
                     expiry = self.core.contract_pool['EXP'][0].get_expiry(dt_object=True)
@@ -236,7 +234,7 @@ class PipelineBuilder:
 
                 elif self.core.contract_pool['OPT'] and len(self.core.contract_pool['OPT']) > 0:
                     self.db.check_table_exists(contract_container=self.core.contract_pool['OPT'][0], create_missing=True)
-
+                    #tprint(f'OPT check')
                     last_update = self.db.get_last_update(contract_container=self.core.contract_pool['OPT'][0], response=True)
                     expiry = self.core.contract_pool['OPT'][0].get_expiry(dt_object=True)
 
@@ -253,11 +251,11 @@ class PipelineBuilder:
                         else:
                             #tprint('Adding from OPT4.')
                             self.core.contract_pool['OPT'] = self.core.contract_pool['OPT'][1:].append(self.core.contract_pool['OPT'][0])
-                            # TODO Find better solution
                     else:
+                        #tprint('Adding from OPT5.')
+                        self.core.contract_pool['OPT'] = self.core.contract_pool['OPT'][1:] + [self.core.contract_pool['OPT'][0]]
 
-                        self.core.contract_pool['OPT'] = self.core.contract_pool['OPT'][1:].append(self.core.contract_pool['OPT'][0])
-
+                sleep(.1)
 
             if datetime.now().weekday() not in self.core.timer_exclude_days:
                 if datetime.now() >= self.core.stk_update_timer:
