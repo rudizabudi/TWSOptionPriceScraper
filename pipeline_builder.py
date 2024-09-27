@@ -1,4 +1,5 @@
 from datetime import datetime, time, timedelta
+from dotenv import load_dotenv, set_key
 import pickle
 import pyodbc
 import random
@@ -47,10 +48,13 @@ class PipelineBuilder:
 
             tprint('Building option contracts ended.')
 
-        if datetime.now().time().hour < 22:
+        current_time = datetime.now().time()
+        last_scheduled_update =self.core.exp_update_timer - timedelta(days=1)
+        if current_time < self.core.exp_update_timer.time() and self.core.exp_last_update < last_scheduled_update:
             self.get_exp_options()
+        else:
+            tprint('Generating expired option list skipped because they are up2date.')
         self.option_exp_max_length = len(self.core.contract_pool['EXP'])
-
 
         for list_type in ['STK', 'OPT', 'EXP']:
             tprint(f'{list_type} length:{len(self.core.contract_pool[list_type])}')
@@ -94,6 +98,8 @@ class PipelineBuilder:
                 while not stk.get_expiries() and not stk.get_strikes() and datetime.now() < time_breaker:
                     sleep(.1)
                     pass
+
+        self.stk_sorter_pointer = len(self.core.contract_pool['STK'])
 
         tprint('Building stock contracts ended.')
 
@@ -225,12 +231,20 @@ class PipelineBuilder:
                         contracts_done = self.option_exp_max_length - len(self.core.contract_pool['EXP'])
                         tprint(f'Expired options progress: {pct_done:.2f}%. Contracts done: {contracts_done}')
 
+                    if not self.core.contract_pool['EXP'] or len(self.core.contract_pool['EXP']) == 0:
+                        self.core.exp_last_update = datetime.now().timestamp()
+                        set_key(dotenv_path='.env', key_to_set='EXP_LAST_UPDATE', value_to_set=str(self.core.stk_last_update))
+
                 elif len(self.core.contract_pool['STK'][self.stk_sorter_pointer:]) > 0:
                     #tprint('Adding from STK.')
                     self.db.check_table_exists(contract_container=self.core.contract_pool['STK'][self.stk_sorter_pointer], create_missing=True)
                     self.core.immediate_pool.append(self.core.contract_pool['STK'][self.stk_sorter_pointer])
                     #self.core.immediate_pool.append(self.core.contract_pool['STK'].pop(0))
                     self.stk_sorter_pointer += 1
+
+                    if self.stk_sorter_pointer >= len(self.core.contract_pool['STK']):
+                        self.core.stk_last_update = datetime.now().timestamp()
+                        set_key(dotenv_path='.env', key_to_set='STK_LAST_UPDATE', value_to_set=str(self.core.stk_last_update))
 
                 elif self.core.contract_pool['OPT'] and len(self.core.contract_pool['OPT']) > 0:
                     self.db.check_table_exists(contract_container=self.core.contract_pool['OPT'][0], create_missing=True)
@@ -260,11 +274,11 @@ class PipelineBuilder:
             if datetime.now().weekday() not in self.core.timer_exclude_days:
                 if datetime.now() >= self.core.stk_update_timer:
                     tprint('Stk update timer triggered.')
-                    self.core.stk_update_timer = datetime.now() + timedelta(days=1)
+                    self.core.stk_update_timer += timedelta(days=1)
                     self.stk_sorter_pointer = 0
                 elif datetime.now() >= self.core.exp_update_timer:
                     tprint('Exp update timer triggered.')
                     self.get_exp_options()
                     self.option_exp_max_length = len(self.core.contract_pool['EXP'])
 
-                    self.core.exp_update_timer = datetime.now() + timedelta(days=1)
+                    self.core.exp_update_timer += timedelta(days=1)

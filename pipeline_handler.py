@@ -152,9 +152,11 @@ class PipelineHandler:
                     for i in range(ceil(len(iq_rows) / self.core.insert_query_max_lines)):
                         insert_query = iq_header + ','.join(str(x) for x in iq_rows[i * self.core.insert_query_max_lines:min(len(iq_rows), (i + 1) * self.core.insert_query_max_lines)]) + ';'
                         self.db.write_price_data(query_string=insert_query)
-
                 else:
-                    tprint(f'Writing no new price data for {contract_instance.get_symbol()} {contract_instance.get_secType()} to database {contract_instance.get_table()}.')
+                    if contract_instance.get_secType() == 'OPT':
+                        tprint(f'Writing no price data for {contract_instance.get_symbol()} {contract_instance.get_secType()} to database {contract_instance.get_table()} {contract_instance.get_right()} {contract_instance.get_strike()}.')
+                    else:
+                        tprint(f'Writing no price data for {contract_instance.get_symbol()} {contract_instance.get_secType()} to database {contract_instance.get_table()}.')
 
                 self.core.writable_pool.pop(0)
 

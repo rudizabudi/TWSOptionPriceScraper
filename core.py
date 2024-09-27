@@ -17,6 +17,9 @@ class Core:
         self.sql_password: str = os.getenv('SQL_PASSWORD')
         self.connection_string: str = f'DRIVER={{ODBC Driver 17 for SQL Server}};SERVER={self.sql_server};UID={self.sql_user};PWD={self.sql_password}'
 
+        self.stk_last_update: datetime = datetime.fromtimestamp(float(os.getenv('STK_LAST_UPDATE')))
+        self.exp_last_update: datetime = datetime.fromtimestamp(float(os.getenv('EXP_LAST_UPDATE')))
+
         self.reqId_hashmap: dict = {}
         self.reqId_1: int = 1
         self.reqId_2: int = 100_000_000
