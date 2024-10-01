@@ -21,3 +21,8 @@ gen
 /tester.py
 !/expired_option_contracts - Kopie.pkl
 !/option_contracts - Kopie.pkl
+/expired_option_contracts - Kopie.pkl
+/option_contracts - Kopie.pkl
+!/sql_maintenance.py
+/sql_maintenance.py
+/tws_option_scraper.bat

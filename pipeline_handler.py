@@ -146,6 +146,8 @@ class PipelineHandler:
                 if iq_header and iq_rows:
                     if contract_instance.get_secType() == 'OPT':
                         tprint(f'Writing #{len(iq_rows)} price data for {contract_instance.get_symbol()} {contract_instance.get_secType()} to database {contract_instance.get_table()} {contract_instance.get_right()} {contract_instance.get_strike()}.')
+                        #if len(iq_rows) == 0:
+
                     else:
                         tprint(f'Writing #{len(iq_rows)} price data for {contract_instance.get_symbol()} {contract_instance.get_secType()} to database {contract_instance.get_table()}.')
 
@@ -169,13 +171,16 @@ class PipelineHandler:
 
     def connection_handler(self) -> bool:
         if not self.tws_con.isConnected():
-            print('Disconnected 3456')
+            print('Disconnected 34567')
             while True:
-                print(1)
-                self.tws_con.connect(self.core.host_ip, self.core.api_port, self.core.client_id)
-                print(2)
-                sleep(10)
-                if self.tws_con.isConnected():
-                    print(3)
-                    break
+                try:
+                    print(1)
+                    self.tws_con.connect(self.core.host_ip, self.core.api_port, self.core.client_id)
+                    print(2)
+                    sleep(10)
+                    if self.tws_con.isConnected():
+                        print(3)
+                        break
+                except:
+                    print(4)
         return True

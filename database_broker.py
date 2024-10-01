@@ -44,7 +44,7 @@ class DatabaseBroker():
         return con_wrapper
 
     @sql_query
-    def fetch_all_table_names(self, cursor: pyodbc.Cursor, db_name: str = None, return_data: bool = False, **kwargs) -> dict[None | dict[str, list[str]], bool]:
+    def fetch_all_table_names(self, cursor: pyodbc.Cursor, db_name: str = None, return_data: bool = False, **kwargs) -> dict[str: None | dict[str, list[str]], str: bool]:
         """
             Fetches the names of all tables in the database.
 
@@ -79,10 +79,10 @@ class DatabaseBroker():
         if return_data:
             return {'data': self.table_structure, 'commit': False}
         else:
-            return {'data': [], 'commit': False}
+            return {'data': None, 'commit': False}
 
     @sql_query
-    def check_table_exists(self, cursor: pyodbc.Cursor, contract_container: "ContractContainer", create_missing: bool = True, **kwargs):
+    def check_table_exists(self, cursor: pyodbc.Cursor, contract_container: "ContractContainer", create_missing: bool = True, **kwargs) -> dict[str: None, str: bool]:
         """
          Check if a database and a table exists for a given contract.
 
@@ -123,7 +123,7 @@ class DatabaseBroker():
         return {'data': None, 'commit': False}
 
     @sql_query
-    def get_last_update(self, cursor: pyodbc.Cursor, contract_container: "ContractContainer", **kwargs) -> dict[datetime, bool]:
+    def get_last_update(self, cursor: pyodbc.Cursor, contract_container: "ContractContainer", **kwargs) -> dict[str: datetime, str: bool]:
         """
         Fetches the latest update from the database for a given contract.
 
@@ -165,7 +165,7 @@ class DatabaseBroker():
         return {'data': last_update, 'commit': False}
 
     @sql_query
-    def get_last_price(self, cursor: pyodbc.Cursor, stk_symbol: str, **kwargs) -> dict[str, bool | None]:
+    def get_last_price(self, cursor: pyodbc.Cursor, stk_symbol: str, **kwargs) -> dict[str: float | None:, str: bool ] :
         query = f"""
                 SELECT c
                 FROM [Data_STK].[dbo].[{f'{stk_symbol}_STK'}]

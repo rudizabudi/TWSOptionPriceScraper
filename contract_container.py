@@ -81,7 +81,7 @@ class ContractContainer:
     def get_right(self) -> str:
         return self.contract.right
 
-    def get_strike(self) -> int:
+    def get_strike(self) -> int | float:
         if self.contract.secType == 'STK':
             raise Exception(f'Strike only available for contract instances of secType OPT. Requested {self.contract.symbol} of type {self.contract.secType}.')
         return self.contract.strike
@@ -176,12 +176,15 @@ class ContractContainer:
             case _:
                 raise KeyError('Security type not supported. Valid secTypes: STK, OPT')
 
-    def set_error_flag(self, flag=False,**kwargs):
+    def get_error_flag(self, **kwargs) -> bool:
+        return self.error_flag
+
+    def set_error_flag(self, flag=False, **kwargs):
         #print(f'Error flag set for {self.contract.symbol}.')
         self.error_flag = flag
 
-    def get_error_flag(self, **kwargs) -> bool:
-        return self.error_flag
+    def get_underlying_price(self, **kwargs) -> float:
+        return self.db.get_last_price(stk_symbol=self.get_symbol())
 
     def set_historical_data_end(self, flag=False, **kwargs):
         self.historical_data_end = flag

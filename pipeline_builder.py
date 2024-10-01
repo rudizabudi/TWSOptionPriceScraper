@@ -1,5 +1,7 @@
+from collections import defaultdict
 from datetime import datetime, time, timedelta
 from dotenv import load_dotenv, set_key
+from itertools import batched
 import pickle
 import pyodbc
 import random
@@ -127,7 +129,7 @@ class PipelineBuilder:
             for strike in stk.get_strikes():
                 for right in ['C', 'P']:
                     opt = self.ContractContainer(self.core, symbol=stk.get_symbol(), secType='OPT', strike=strike, right=right, lastTradeDateOrContractMonth=expiry)
-                    opt_contracts.append(opt)
+                    opt_contracts.extend(opt)
                     stk.register_derivative_child(opt)
             if opt:
                 self.db.check_table_exists(contract_container=opt)
@@ -159,18 +161,28 @@ class PipelineBuilder:
                 if datetime.strptime(table.split('_')[2], '%d%b%y').date() in expiries:
                     expired_tables[table] = None
 
+        exp_order = defaultdict(list)
         for table in expired_tables.keys():
             #last_price = self.db.get_last_price(stk_symbol=table.split('_')[0])
             stk_contract = list(filter(lambda x: x.get_symbol() == table.split('_')[0] and x.get_secType() == 'STK', self.core.contract_pool['STK']))
             if stk_contract is not None:
                 expiry = datetime.strptime(table.split('_')[2], '%d%b%y').date().strftime('%Y%m%d')
-                opt_contract = self.build_opt_contracts(stk=stk_contract[0], expiry=expiry)
-                self.core.contract_pool['EXP'].extend(opt_contract)
-                if opt_contract in self.core.contract_pool['OPT']:
-                    self.core.contract_pool['OPT'].remove(opt_contract)
+                opt_contracts = self.build_opt_contracts(stk=stk_contract[0], expiry=expiry)
+
+                underlying_last_price = self.ContractContainer.get_underlying_price(stk_contract)
+                opt_contracts = sorted(opt_contracts, key=lambda x: abs(underlying_last_price - x.get_strike()))
+
+                for i, contract_batch in enumerate(batched(opt_contracts, n=2)):
+                    exp_order[i].extend(contract_batch)
+                    for c in contract_batch:
+                        if c in self.core.contract_pool['OPT']:
+                            self.core.contract_pool['OPT'].remove(c)
+
+        for key in exp_order.keys():
+            for contract in exp_order[key]:
+                self.core.contract_pool['EXP'].append(contract)
 
         tprint('Getting expired option contracts ended.')
-
 
     def bit_to_insert(self): # TODO: Implement logical load vs rebuild logic
 
@@ -233,7 +245,7 @@ class PipelineBuilder:
 
                     if not self.core.contract_pool['EXP'] or len(self.core.contract_pool['EXP']) == 0:
                         self.core.exp_last_update = datetime.now().timestamp()
-                        set_key(dotenv_path='.env', key_to_set='EXP_LAST_UPDATE', value_to_set=str(self.core.stk_last_update))
+                        set_key(dotenv_path='.env', key_to_set='EXP_LAST_UPDATE', value_to_set=str(self.core.exp_last_update))
 
                 elif len(self.core.contract_pool['STK'][self.stk_sorter_pointer:]) > 0:
                     #tprint('Adding from STK.')
