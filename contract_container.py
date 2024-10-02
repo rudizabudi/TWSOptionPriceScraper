@@ -31,7 +31,7 @@ class ContractContainer:
 
         self.db = DatabaseBroker(self.core, self)
 
-    def __str__(self):
+    def __str__(self) -> str:
         match self.contract.secType:
             case 'STK':
                 return f'<Data Container Instance> {self.contract.symbol} STK.'
@@ -89,7 +89,7 @@ class ContractContainer:
     def get_symbol(self) -> str:
         return self.contract.symbol
 
-    def get_expiries(self) -> list[int]:
+    def get_expiries(self, ** kwargs) -> list[int]:
         if self.contract.secType != 'STK':
             raise Exception(f'Expiry lists only available for contract instances of secType STK. Requested {self.contract.symbol} of type {self.contract.secType}.')
         elif not self.expiries:
@@ -98,7 +98,7 @@ class ContractContainer:
         else:
             return self.expiries
 
-    def get_expiry(self, dt_object: bool = False, output_str_format: str = '%Y%m%d') -> datetime | str | None:
+    def get_expiry(self, dt_object: bool = False, output_str_format: str = '%Y%m%d', ** kwargs) -> datetime | str | None:
         if self.contract.secType != 'OPT':
             raise Exception(f'Expiry date only available for contract instances of secType OPT. Requested {self.contract.symbol} of type {self.contract.secType}.')
 
@@ -117,13 +117,13 @@ class ContractContainer:
         else:
             return self.strikes
 
-    def set_strexp(self,  expiries: list[str], strikes: list[int]):
+    def set_strexp(self,  expiries: list[str], strikes: list[int], ** kwargs):
         for x in expiries:
             if x not in self.expiries: self.expiries.append(x)
         for x in strikes:
             if x not in self.strikes: self.strikes.append(x)
 
-    def set_reqId_assign(self, reqId: int, reqType: str):
+    def set_reqId_assign(self, reqId: int, reqType: str, ** kwargs):
         """
         Assigns a request ID to a specific request type.
 
@@ -149,10 +149,10 @@ class ContractContainer:
             case _:
                 raise AttributeError('Invalid reqType. Valid options: ReqHistData, ReqConDetails, ReqExpStr')
 
-    def register_derivative_child(self, child: 'ContractContainer'):
+    def register_derivative_child(self, child: 'ContractContainer', ** kwargs):
         self.child_container.append(child)
 
-    def get_last_update(self, response = True) -> datetime | NoReturn:
+    def get_last_update(self, response: bool = True, ** kwargs) -> datetime | NoReturn:
         if not self.last_update:
             self.last_update = self.db.get_last_update(contract_container=self)
         if response:
@@ -179,14 +179,14 @@ class ContractContainer:
     def get_error_flag(self, **kwargs) -> bool:
         return self.error_flag
 
-    def set_error_flag(self, flag=False, **kwargs):
+    def set_error_flag(self, flag: bool = False, **kwargs):
         #print(f'Error flag set for {self.contract.symbol}.')
         self.error_flag = flag
 
-    def get_underlying_price(self, **kwargs) -> float:
+    def get_last_price(self, **kwargs) -> float:
         return self.db.get_last_price(stk_symbol=self.get_symbol())
 
-    def set_historical_data_end(self, flag=False, **kwargs):
+    def set_historical_data_end(self, flag: bool = False, **kwargs):
         self.historical_data_end = flag
 
     def get_historical_data_end(self, **kwargs) -> bool:

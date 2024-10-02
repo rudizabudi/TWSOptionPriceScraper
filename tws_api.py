@@ -41,28 +41,11 @@ class TWSCon(EWrapper, EClient):
         super().historicalDataEnd(reqId, start, end)
         self.core.reqId_hashmap[reqId].__self__.set_historical_data_end(flag=True)
 
-
-    def historicalTicksBidAsk(self, reqId, ticks, done):
-        print('Ticks:', ticks)
-
     def securityDefinitionOptionParameter(self, reqId, exchange, underlyingConId, tradingClass, multiplier, expirations, strikes):
-
         if reqId not in self.core.reqId_hashmap.keys():
             raise KeyError('ReqId not assigned to an security class instance.')
 
         self.core.reqId_hashmap[reqId](expiries=list(expirations) or [], strikes=list(strikes) or [])
-
-
-        # if reqId not in self.reqId_cache.keys():
-        #     self.reqId_cache[reqId] = {'expiries': [],
-        #                                'strikes': []}
-        # for x in list(expirations):
-        #     if x not in self.reqId_cache[reqId]['expiries']:
-        #         self.reqId_cache[reqId]['expiries'].append(x)
-        #
-        # for x in list(strikes):
-        #     if x not in self.reqId_cache[reqId]['strikes']:
-        #         self.reqId_cache[reqId]['strikes'].append(x)
 
     def contractDetails(self, reqId: int, contractDetails):
         if reqId not in self.core.reqId_hashmap.keys():

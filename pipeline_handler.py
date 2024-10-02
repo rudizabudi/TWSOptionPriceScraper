@@ -175,7 +175,7 @@ class PipelineHandler:
             while True:
                 try:
                     print(1)
-                    self.tws_con.connect(self.core.host_ip, self.core.api_port, self.core.client_id)
+                    self.tws_con.connect(self.core.host_ip, self.core.api_port, self.core.client_id) # Reconnection fails here.
                     print(2)
                     sleep(10)
                     if self.tws_con.isConnected():

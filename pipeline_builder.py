@@ -129,7 +129,7 @@ class PipelineBuilder:
             for strike in stk.get_strikes():
                 for right in ['C', 'P']:
                     opt = self.ContractContainer(self.core, symbol=stk.get_symbol(), secType='OPT', strike=strike, right=right, lastTradeDateOrContractMonth=expiry)
-                    opt_contracts.extend(opt)
+                    opt_contracts.append(opt)
                     stk.register_derivative_child(opt)
             if opt:
                 self.db.check_table_exists(contract_container=opt)
@@ -164,12 +164,12 @@ class PipelineBuilder:
         exp_order = defaultdict(list)
         for table in expired_tables.keys():
             #last_price = self.db.get_last_price(stk_symbol=table.split('_')[0])
-            stk_contract = list(filter(lambda x: x.get_symbol() == table.split('_')[0] and x.get_secType() == 'STK', self.core.contract_pool['STK']))
+            stk_contract = list(filter(lambda x: x.get_symbol() == table.split('_')[0] and x.get_secType() == 'STK', self.core.contract_pool['STK']))[0]
             if stk_contract is not None:
                 expiry = datetime.strptime(table.split('_')[2], '%d%b%y').date().strftime('%Y%m%d')
-                opt_contracts = self.build_opt_contracts(stk=stk_contract[0], expiry=expiry)
+                opt_contracts = self.build_opt_contracts(stk=stk_contract, expiry=expiry)
 
-                underlying_last_price = self.ContractContainer.get_underlying_price(stk_contract)
+                underlying_last_price = stk_contract.get_last_price()
                 opt_contracts = sorted(opt_contracts, key=lambda x: abs(underlying_last_price - x.get_strike()))
 
                 for i, contract_batch in enumerate(batched(opt_contracts, n=2)):
