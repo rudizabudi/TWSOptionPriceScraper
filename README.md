@@ -1,3 +1,5 @@
+![image](https://github.com/user-attachments/assets/f60f16e1-eb24-4852-bde7-f1a48d3d1256)
+
 # TWS API Option Price Scraper
 
 This script generates a custom option price history SQL database for all provided underlying symbols across all strikes, expiries and rights.
