@@ -29,7 +29,7 @@ class DatabaseBroker():
             #print('Cursor opened')
             # print('Args', args)
             # print('Kwargs', kwargs)
-            result = func(self, cursor = cursor, conn = sql_con, *args, **kwargs) or {}
+            result = func(self, cursor = cursor, con = sql_con, *args, **kwargs) or {}
 
             if isinstance(result, dict) and 'commit' in result.keys():
                 sql_con.commit()
@@ -182,12 +182,12 @@ class DatabaseBroker():
         return {'data': last_price, 'commit': False}
 
     @sql_query
-    def create_database(self, cursor: pyodbc.Cursor, conn: pyodbc.Connection, db_name: str, **kwargs):
+    def create_database(self, cursor: pyodbc.Cursor, con: pyodbc.Connection, db_name: str, **kwargs):
 
-        conn.autocommit = True
+        con.autocommit = True
         query = f'CREATE DATABASE {db_name}'
         cursor.execute(query)
-        conn.autocommit = False
+        con.autocommit = False
 
         return {'data': True, 'commit': True}
 
@@ -199,7 +199,7 @@ class DatabaseBroker():
                 query = f'USE [{db_name}]'
                 cursor.execute(query)
 
-                table_name = f'{table_name.replace('.', '')}_STK'
+                table_name = f'{table_name.replace('.', '')}'
                 query = """CREATE TABLE {table_name} (
                                     date DATETIME,
                                     h FLOAT,

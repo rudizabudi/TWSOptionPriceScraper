@@ -2,32 +2,35 @@ from collections import defaultdict
 from datetime import datetime, time, timedelta
 from dotenv import load_dotenv, set_key
 from itertools import batched
+import os
 import pickle
 import pyodbc
 import random
 from time import sleep
 from threading import Thread
 
+from ibapi.contract import Contract
+
 from contract_container import ContractContainer
 from core import tprint
-
 
 class PipelineBuilder:
     def __init__(self, core =None, tws_con=None, CC=None, DB=None):
         if None in (core, tws_con, CC, DB):
             raise Exception('<PipelineBuilder INIT> All parameters must be specified.')
 
-        self.core = core
-        self.tws_con = tws_con
-        self.ContractContainer = CC
+        self.core: core = core
+        self.tws_con: tws_con = tws_con
+        self.ContractContainer: ContractContainer = CC
 
-        self.db = DB(core=self.core, CC=self.ContractContainer)
+        self.db: DB = DB(core=self.core, CC=self.ContractContainer)
 
         self.stk_sorter_pointer: int = 0
 
-        self.t1 = Thread(target=self.pipeline_sorter, daemon=True).start()
+        self.t1: Thread = Thread(target=self.pipeline_sorter)
+        self.t1.start()
 
-        self.debug_load = False
+        self.debug_load: bool = False
 
         self.option_exp_max_length = 0
 
@@ -46,20 +49,22 @@ class PipelineBuilder:
 
             if self.core.randomize_opts:
                 random.shuffle(self.core.contract_pool['OPT'])
-                tprint(f'OPT contracts randomized.')
+                tprint(f'Option contracts randomized.')
 
             tprint('Building option contracts ended.')
 
         current_time = datetime.now().time()
-        last_scheduled_update =self.core.exp_update_timer - timedelta(days=1)
+        last_scheduled_update = self.core.exp_update_timer - timedelta(days=1)
         if current_time < self.core.exp_update_timer.time() and self.core.exp_last_update < last_scheduled_update:
             self.get_exp_options()
+        elif datetime.today().weekday() in [5, 6]:
+            'expired_option_contracts.pkl'
         else:
             tprint('Generating expired option list skipped because they are up2date.')
         self.option_exp_max_length = len(self.core.contract_pool['EXP'])
 
-        for list_type in ['STK', 'OPT', 'EXP']:
-            tprint(f'{list_type} length:{len(self.core.contract_pool[list_type])}')
+        for list_type, name in {'STK': 'Stock', 'OPT': 'Option', 'EXP':'Expiry'}.items():
+            tprint(f'Start {name} queue length: {len(self.core.contract_pool[list_type])}')
 
         self.core.startup = False
 
@@ -81,20 +86,17 @@ class PipelineBuilder:
         for symbol in self.core.underlying_list['STK']:
 
             stk = self.ContractContainer(self.core, symbol=symbol, secType='STK')
-            # TODO: Check correct symbol for B shares like BRK.B
 
-            stk.set_reqId_assign(self.core.reqId_1, reqType='ReqConDetails')
+            stk.set_reqId_assign(self.core.reqId_1, reqType='reqConDetails')
             self.tws_con.reqContractDetails(self.core.reqId_1, stk.get_contract())
             self.core.reqId_1 += 1
 
             while not stk.get_error_flag() and not stk.get_conId():
                 pass
-
             if stk.check_conId():
-                stk.set_reqId_assign(self.core.reqId_1, reqType='ReqExpStr')
+                stk.set_reqId_assign(self.core.reqId_1, reqType='reqExpStr')
                 self.tws_con.reqSecDefOptParams(self.core.reqId_1, stk.get_symbol(), '', stk.get_secType(), stk.get_conId())
                 self.core.reqId_1 += 1
-
                 self.core.contract_pool['STK'].append(stk)
                 time_breaker = datetime.now() + timedelta(seconds=5)
                 while not stk.get_expiries() and not stk.get_strikes() and datetime.now() < time_breaker:
@@ -131,6 +133,7 @@ class PipelineBuilder:
                     opt = self.ContractContainer(self.core, symbol=stk.get_symbol(), secType='OPT', strike=strike, right=right, lastTradeDateOrContractMonth=expiry)
                     opt_contracts.append(opt)
                     stk.register_derivative_child(opt)
+
             if opt:
                 self.db.check_table_exists(contract_container=opt)
             else:
@@ -149,43 +152,72 @@ class PipelineBuilder:
         :output: Appending: self.core.contract_pool['EXP'] :appending | :deleting [optional] (['OPT[)
         """
 
-        tprint('Getting expired option contracts...')
-        start = 0 if datetime.now().time() > time(22, 00) else 1
-        expiries = [datetime.today().date() - timedelta(days=x) for x in range(start, self.core.expired_opt_days + 1)]
-        table_structure = self.db.fetch_all_table_names(return_data=True)
-        databases = set(map(lambda x: f'Data_OPT_{x.strftime('%b%y')}', expiries))
+        exp_options_loaded = False
+        try:
+            m_time = os.path.getmtime(self.core.exp_opt_file_name)
+            if (datetime.today() - datetime.fromtimestamp(m_time)) <= timedelta(days=3) and datetime.fromtimestamp(m_time).weekday() in [4, 5, 6]:
+                with open(self.core.exp_opt_file_name, 'rb') as f:
+                    self.core.contract_pool['EXP'] = pickle.load(f)
 
-        expired_tables = {}
-        for database in databases:
-            for table in table_structure[database]:
-                if datetime.strptime(table.split('_')[2], '%d%b%y').date() in expiries:
-                    expired_tables[table] = None
+                exp_options_loaded = True
+                tprint(f'Expired options loaded from {self.core.exp_opt_file_name}.')
+        except FileNotFoundError:
+            pass
 
-        exp_order = defaultdict(list)
-        for table in expired_tables.keys():
-            #last_price = self.db.get_last_price(stk_symbol=table.split('_')[0])
-            stk_contract = list(filter(lambda x: x.get_symbol() == table.split('_')[0] and x.get_secType() == 'STK', self.core.contract_pool['STK']))[0]
-            if stk_contract is not None:
-                expiry = datetime.strptime(table.split('_')[2], '%d%b%y').date().strftime('%Y%m%d')
-                opt_contracts = self.build_opt_contracts(stk=stk_contract, expiry=expiry)
+        if not exp_options_loaded:
+            tprint('Getting expired option contracts...')
+            start = 0 if datetime.now().time() > time(22, 00) else 1
+            expiries = [datetime.today().date() - timedelta(days=x) for x in range(start, self.core.expired_opt_days + 1)]
+            table_structure = self.db.fetch_all_table_names(return_data=True)
+            databases = set(map(lambda x: f'Data_OPT_{x.strftime('%b%y')}', expiries))
 
-                underlying_last_price = stk_contract.get_last_price()
-                opt_contracts = sorted(opt_contracts, key=lambda x: abs(underlying_last_price - x.get_strike()))
+            expired_tables = {}
+            for database in databases:
+                for table in table_structure[database]:
+                    if datetime.strptime(table.split('_')[2], '%d%b%y').date() in expiries:
+                        expired_tables[table] = None
 
-                for i, contract_batch in enumerate(batched(opt_contracts, n=2)):
-                    exp_order[i].extend(contract_batch)
-                    for c in contract_batch:
-                        if c in self.core.contract_pool['OPT']:
-                            self.core.contract_pool['OPT'].remove(c)
+            exp_order = defaultdict(list)
+            for table in expired_tables.keys():
+                #last_price = self.db.get_last_price(stk_symbol=table.split('_')[0])
+                try:
+                    stk_contract = list(filter(lambda x: x.get_symbol() == table.split('_')[0] and x.get_secType() == 'STK', self.core.contract_pool['STK']))[0]
+                    if stk_contract is not None:
+                        expiry = datetime.strptime(table.split('_')[2], '%d%b%y').date().strftime('%Y%m%d')
+                        opt_contracts = self.build_opt_contracts(stk=stk_contract, expiry=expiry)
 
-        for key in exp_order.keys():
-            for contract in exp_order[key]:
-                self.core.contract_pool['EXP'].append(contract)
+                        underlying_last_price = stk_contract.get_last_price()
+                        try:
+                            opt_contracts = sorted(opt_contracts, key=lambda x: abs(underlying_last_price - x.get_strike()))
+                        except TypeError:
+                            tprint(f'No stock pricing data available for {stk_contract}.')
 
-        tprint('Getting expired option contracts ended.')
+                        for i, contract_batch in enumerate(batched(opt_contracts, n=2)):
+                            exp_order[i].extend(contract_batch)
+                            for c in contract_batch:
+                                if c in self.core.contract_pool['OPT']:
+                                    self.core.contract_pool['OPT'].remove(c)
+                except IndexError:
+                    tprint(f'Index error for {table.split('_')[0]}.')
+                    continue
 
-    def bit_to_insert(self): # TODO: Implement logical load vs rebuild logic
+            for key in exp_order.keys():
+                for contract in exp_order[key]:
+                    self.core.contract_pool['EXP'].append(contract)
 
+            tprint('Getting expired option contracts ended.')
+
+            save_exp_options = True
+            if save_exp_options:
+                with open(self.core.exp_opt_file_name, 'wb') as file:
+                    pass
+                with open(self.core.exp_opt_file_name, 'wb') as file:
+                    pickle.dump(self.core.contract_pool['EXP'], file)
+
+            tprint(f'Expired options saved to {self.core.exp_opt_file_name}.')
+
+
+    def code_cemetery(self):
         print('Loading contract data')
         with open('option_contracts.pkl', 'rb') as file:
             contracts = pickle.load(file)
@@ -227,12 +259,10 @@ class PipelineBuilder:
             while len(self.core.immediate_pool) < self.core.ip_length:
 
                 if len(self.core.contract_pool['EXP']) > 0:
-
                     last_update = self.db.get_last_update(contract_container=self.core.contract_pool['EXP'][0], response=True)
                     expiry = self.core.contract_pool['EXP'][0].get_expiry(dt_object=True)
 
-                    if (last_update and last_update < expiry + timedelta(hours=21, minutes=45)) or not last_update: # TODO add timezones for global application
-                        #tprint('Adding from EXP.')
+                    if (last_update and last_update < expiry + timedelta(hours=21, minutes=45)) or not last_update:
                         self.db.check_table_exists(contract_container=self.core.contract_pool['EXP'][0], create_missing=True)
                         self.core.immediate_pool.append(self.core.contract_pool['EXP'].pop(0))
                     else:
@@ -242,6 +272,10 @@ class PipelineBuilder:
                         pct_done = ((self.option_exp_max_length - len(self.core.contract_pool['EXP'])) / self.option_exp_max_length) * 100
                         contracts_done = self.option_exp_max_length - len(self.core.contract_pool['EXP'])
                         tprint(f'Expired options progress: {pct_done:.2f}%. Contracts done: {contracts_done}')
+
+                        if datetime.today().weekday() in [5, 6]:
+                            with open(self.core.exp_opt_file_name, 'wb') as file:
+                                pickle.dump(self.core.contract_pool['EXP'], file)
 
                     if not self.core.contract_pool['EXP'] or len(self.core.contract_pool['EXP']) == 0:
                         self.core.exp_last_update = datetime.now().timestamp()
@@ -280,6 +314,9 @@ class PipelineBuilder:
                     else:
                         #tprint('Adding from OPT5.')
                         self.core.contract_pool['OPT'] = self.core.contract_pool['OPT'][1:] + [self.core.contract_pool['OPT'][0]]
+
+                if len(self.core.contract_pool["OPT"]) % 1000 == 0:
+                    tprint(f'Option pool remaining length: {len(self.core.contract_pool["OPT"])}')
 
                 sleep(.1)
 

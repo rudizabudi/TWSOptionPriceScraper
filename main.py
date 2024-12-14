@@ -20,5 +20,9 @@ if __name__ == '__main__':
     main()
 
 """
-TODO: 
+TODO: Make SQL query f-strings injection proof
+TODO: Adapt local time conditions to UTC. Make TZ aware
+TODO: Fix odd stocks like BRK.B or ABNB.
+TODO: Improve logical load vs rebuild logic
+TODO: Long-term: Switch from MSQL to InfluxDB
 """

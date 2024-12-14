@@ -34,10 +34,10 @@ class ContractContainer:
     def __str__(self) -> str:
         match self.contract.secType:
             case 'STK':
-                return f'<Data Container Instance> {self.contract.symbol} STK.'
+                return f'<Data Container Instance> {self.contract.symbol} {self.contract.secType}'
             case 'OPT':
                 dt_s: str = datetime.strptime(self.contract.lastTradeDateOrContractMonth, "%Y%m%d").strftime("%d%b%y")
-                return f'<Data Container Instance> {self.contract.symbol} {self.contract.strike}{self.contract.right} {dt_s} OPT.'
+                return f'<Data Container Instance> {self.contract.symbol} {self.contract.strike}{self.contract.right} {dt_s} {self.contract.secType}'
 
     def build_contract(self, **kwargs):
         self.contract: Contract = Contract()
@@ -140,14 +140,14 @@ class ContractContainer:
             None
         """
         match reqType:
-            case 'ReqHistData':
+            case 'reqHistData':
                 self.core.reqId_hashmap[reqId] = self.set_price_data
-            case 'ReqConDetails':
+            case 'reqConDetails':
                 self.core.reqId_hashmap[reqId] = self.set_conId
-            case 'ReqExpStr':
+            case 'reqExpStr':
                 self.core.reqId_hashmap[reqId] = self.set_strexp
             case _:
-                raise AttributeError('Invalid reqType. Valid options: ReqHistData, ReqConDetails, ReqExpStr')
+                raise AttributeError('Invalid reqType. Valid options: reqHistData, reqConDetails, reqExpStr')
 
     def register_derivative_child(self, child: 'ContractContainer', ** kwargs):
         self.child_container.append(child)

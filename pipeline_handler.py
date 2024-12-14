@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 from math import floor, ceil
 from threading import Thread
 from time import sleep
@@ -17,8 +17,8 @@ class PipelineHandler:
         self.ContractContainer = CC
         self.db = DB
 
-        self.t1 = Thread(target=self.request_prices, daemon=True).start()
-        self.t2 = Thread(target=self.write_to_database, daemon=True).start()
+        self.t1 = Thread(target=self.request_prices).start()
+        self.t2 = Thread(target=self.write_to_database).start()
 
 
     def request_prices(self):
@@ -57,7 +57,7 @@ class PipelineHandler:
                     raise Exception(f'Invalid duration: {duration}')
 
                 #tprint(f'Requesting prices for {contract_instance.get_symbol()} with last update {last_update} and duration {durationStr}')
-                contract_instance.set_reqId_assign(self.core.reqId_2, reqType='ReqHistData')
+                contract_instance.set_reqId_assign(self.core.reqId_2, reqType='reqHistData')
                 query_time = datetime.today().strftime("%Y%m%d-%H:%M:%S")
                 self.tws_con.reqHistoricalData( reqId=self.core.reqId_2,
                                                 contract=contract_instance.get_contract(),
@@ -69,6 +69,8 @@ class PipelineHandler:
                                                 formatDate=1,
                                                 keepUpToDate=False,
                                                 chartOptions=[])
+
+                #tprint(f'Requesting prices for {contract_instance.get_symbol()} with last update {last_update} and duration {duration_str}')
                 self.core.reqId_2 += 1
 
                 timeout_secs = 60
@@ -92,6 +94,8 @@ class PipelineHandler:
             except IndexError:
                 while len(self.core.immediate_pool) == 0:
                     sleep(.1)
+            except Exception as e:
+                tprint(f'Unhandled exception: {e}')
 
     def write_to_database(self):
         """
@@ -129,8 +133,12 @@ class PipelineHandler:
 
                 iq_rows = []
                 for i, (dt, ohlc) in enumerate(contract_instance.get_price_data().items(), start=1):
-                    #TODO: Check if dt is already datetime object
-                    if not existing_dates or datetime.strptime(dt, "%Y%m%d %H:%M:%S") not in existing_dates:
+                    dt_dt = datetime.strptime(dt, '%Y%m%d %H:%M:%S')
+                    if not existing_dates or dt_dt not in existing_dates:
+                        if date(2024, 10, 27) <= dt_dt.date() <= date(2024, 11, 3): #Time zone shift adjustment
+                            dt_dt += timedelta(hours=1)
+                            dt = dt_dt.strftime('%Y%m%d %H:%M:%S')
+
                         match contract_instance.get_secType():
                             case 'STK':
                                 data_query = f"('{dt}', {ohlc['High']}, {ohlc['Low']}, {ohlc['Open']}, {ohlc['Close']})"
@@ -146,8 +154,7 @@ class PipelineHandler:
                 if iq_header and iq_rows:
                     if contract_instance.get_secType() == 'OPT':
                         tprint(f'Writing #{len(iq_rows)} price data for {contract_instance.get_symbol()} {contract_instance.get_secType()} to database {contract_instance.get_table()} {contract_instance.get_right()} {contract_instance.get_strike()}.')
-                        #if len(iq_rows) == 0:
-
+                        #if len(iq_rows) == 0
                     else:
                         tprint(f'Writing #{len(iq_rows)} price data for {contract_instance.get_symbol()} {contract_instance.get_secType()} to database {contract_instance.get_table()}.')
 
@@ -168,14 +175,14 @@ class PipelineHandler:
                 while len(self.core.writable_pool) == 0:
                     sleep(.1)
 
-
     def connection_handler(self) -> bool:
         if not self.tws_con.isConnected():
-            print('Disconnected 34567')
+            print('Disconnected Connection Handler')
+            print('Next print')
             while True:
                 try:
                     print(1)
-                    self.tws_con.connect(self.core.host_ip, self.core.api_port, self.core.client_id) # Reconnection fails here.
+                    self.tws_con.connect(self.core.host_ip, self.core.api_port, self.core.client_id) # TODO: Reconnection fails here.
                     print(2)
                     sleep(10)
                     if self.tws_con.isConnected():

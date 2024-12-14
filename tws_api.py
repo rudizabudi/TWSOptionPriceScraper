@@ -1,6 +1,6 @@
 from ibapi.client import EClient
 from ibapi.wrapper import EWrapper
-import threading
+from threading import Thread
 
 import time
 
@@ -16,7 +16,7 @@ class TWSCon(EWrapper, EClient):
         self.core.no_contract = False
 
         self.connect(core.host_ip, core.api_port, core.client_id)
-        self.t: threading.Thread = threading.Thread(target=self.run, daemon=True)
+        self.t: Thread = Thread(target=self.run)
         self.t.start()
         time.sleep(1)
 
@@ -24,7 +24,7 @@ class TWSCon(EWrapper, EClient):
         tprint('Connected.')
 
     def connectionClosed(self):
-        tprint('Disconnected.')
+        tprint('Disconnected TWS API.')
 
     def error(self, reqId, errorCode, errorString):
         #print(errorCode, errorString)
