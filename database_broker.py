@@ -2,6 +2,10 @@ from datetime import datetime
 from ibapi.contract import Contract
 import pyodbc
 
+#from contract_container import ContractContainer
+from core import tprint
+
+type ContractContainer = 'ContractContainer'
 
 class DatabaseBroker():
     """
@@ -26,7 +30,7 @@ class DatabaseBroker():
             #print(f'Con opened for {func.__name__}')
 
             cursor: pyodbc.Cursor = sql_con.cursor()
-            #print('Cursor opened')
+            # print('Cursor opened')
             # print('Args', args)
             # print('Kwargs', kwargs)
             result = func(self, cursor = cursor, con = sql_con, *args, **kwargs) or {}
@@ -82,7 +86,7 @@ class DatabaseBroker():
             return {'data': None, 'commit': False}
 
     @sql_query
-    def check_table_exists(self, cursor: pyodbc.Cursor, contract_container: "ContractContainer", create_missing: bool = True, **kwargs) -> dict[str: None, str: bool]:
+    def check_table_exists(self, cursor: pyodbc.Cursor, contract_container: ContractContainer, create_missing: bool = True, **kwargs) -> dict[str: None, str: bool]:
         """
          Check if a database and a table exists for a given contract.
 
@@ -111,19 +115,19 @@ class DatabaseBroker():
 
         if create_missing:
             if database_name not in self.table_structure.keys():
-                print(f'Create database {database_name}')
+                tprint(f'Database {database_name} created.')
                 self.create_database(db_name=database_name)
                 self.fetch_all_table_names(database=database_name)
 
             if table_name not in self.table_structure[database_name]:
-                print(f'Create table {table_name}')
+                tprint(f'Table {table_name} created.')
                 self.create_table(db_name=database_name, table_name=table_name)
                 self.fetch_all_table_names(database=database_name)
 
         return {'data': None, 'commit': False}
 
     @sql_query
-    def get_last_update(self, cursor: pyodbc.Cursor, contract_container: "ContractContainer", **kwargs) -> dict[str: datetime, str: bool]:
+    def get_last_update(self, cursor: pyodbc.Cursor, contract_container: ContractContainer, **kwargs) -> dict[str: datetime, str: bool]:
         """
         Fetches the latest update from the database for a given contract.
 
@@ -231,11 +235,10 @@ class DatabaseBroker():
     def write_price_data(self, cursor, query_string: str, **kwargs) -> dict[str: None, str: bool]:
         if query_string:
             cursor.execute(query_string)
-
             return {'data': None, 'commit': True}
 
     @sql_query
-    def get_existing_dates(self, cursor, contract_container: "ContractContainer" = None, **kwargs) -> dict[str: set[datetime], str: bool]:
+    def get_existing_dates(self, cursor, contract_container: ContractContainer = None, **kwargs) -> dict[str: set[datetime], str: bool]:
 
         contract = contract_container.get_contract()
         database = contract_container.get_database()
@@ -263,9 +266,9 @@ class DatabaseBroker():
 
         return {'data': existing_dates, 'commit': False}
 
-    @staticmethod
-    def check_contract_type(contract):
-        if not isinstance(contract, "ContractContainer"):
-            raise TypeError('Contract must be an instance of the contract class.')
+    # @staticmethod
+    # def check_contract_type(contract):
+    #     if not isinstance(contract, "ContractContainer"):
+    #         raise TypeError('Contract must be an instance of the contract class.')
 
 

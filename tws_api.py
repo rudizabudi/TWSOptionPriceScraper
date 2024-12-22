@@ -29,7 +29,15 @@ class TWSCon(EWrapper, EClient):
     def error(self, reqId, errorCode, errorString):
         #print(errorCode, errorString)
         if errorCode in [162, 200]:
+            #tprint(f'Error {reqId} - {errorCode}: {errorString}')
+            #tprint(f'Error keys: {self.core.reqId_hashmap.keys()}')
             self.core.reqId_hashmap[reqId].__self__.set_error_flag(flag=True)
+            #try:
+                #tprint(f'Error keys: {self.core.reqId_hashmap.keys()}')
+                #self.core.reqId_hashmap[reqId].__self__.set_error_flag(flag=True)
+            #except KeyError:
+                #tprint('Passed')
+                #pass
 
     def historicalData(self, reqId, bar):
         if reqId not in self.core.reqId_hashmap.keys():

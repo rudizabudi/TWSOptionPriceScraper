@@ -39,6 +39,25 @@ class ContractContainer:
                 dt_s: str = datetime.strptime(self.contract.lastTradeDateOrContractMonth, "%Y%m%d").strftime("%d%b%y")
                 return f'<Data Container Instance> {self.contract.symbol} {self.contract.strike}{self.contract.right} {dt_s} {self.contract.secType}'
 
+    def deconstruct(self):
+        match self.contract.secType:
+            case 'STK':
+                value = {'symbol': self.contract.symbol,
+                         'secType': self.contract.secType}
+            case 'OPT':
+                value = {'symbol': self.contract.symbol,
+                         'secType': self.contract.secType,
+                         'strike': self.contract.strike,
+                         'right': self.contract.right,
+                         'lastTradeDateOrContractMonth': self.contract.lastTradeDateOrContractMonth}
+            case _:
+                raise Exception('DataContainer: Invalid secType to deconstruct ContractContainer.')
+        #TODO: Alternative trigger "import Core" again within a method
+        return value
+
+    def reconnect_core_space(self, core):
+        self.core = core
+
     def build_contract(self, **kwargs):
         self.contract: Contract = Contract()
         self.contract.symbol = kwargs['symbol']
@@ -148,6 +167,8 @@ class ContractContainer:
                 self.core.reqId_hashmap[reqId] = self.set_strexp
             case _:
                 raise AttributeError('Invalid reqType. Valid options: reqHistData, reqConDetails, reqExpStr')
+
+        #tprint(f'Request ID {reqId} assigned to {reqType}: {self.core.reqId_hashmap}')
 
     def register_derivative_child(self, child: 'ContractContainer', ** kwargs):
         self.child_container.append(child)

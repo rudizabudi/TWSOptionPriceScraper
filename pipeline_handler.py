@@ -40,7 +40,7 @@ class PipelineHandler:
 
         while not self.core.immediate_pool:
             sleep(10)
-
+        tprint('Requesting prices...')
         while True:
             try:
                 contract_instance = self.core.immediate_pool[0]
@@ -153,19 +153,19 @@ class PipelineHandler:
 
                 if iq_header and iq_rows:
                     if contract_instance.get_secType() == 'OPT':
-                        tprint(f'Writing #{len(iq_rows)} price data for {contract_instance.get_symbol()} {contract_instance.get_secType()} to database {contract_instance.get_table()} {contract_instance.get_right()} {contract_instance.get_strike()}.')
+                        tprint(f'Writing {len(iq_rows)} new price data points for {contract_instance.get_symbol()} {contract_instance.get_secType()} to database {contract_instance.get_table()} {contract_instance.get_right()} {contract_instance.get_strike()}.')
                         #if len(iq_rows) == 0
                     else:
-                        tprint(f'Writing #{len(iq_rows)} price data for {contract_instance.get_symbol()} {contract_instance.get_secType()} to database {contract_instance.get_table()}.')
+                        tprint(f'Writing {len(iq_rows)} new price data points for {contract_instance.get_symbol()} {contract_instance.get_secType()} to database {contract_instance.get_table()}.')
 
                     for i in range(ceil(len(iq_rows) / self.core.insert_query_max_lines)):
                         insert_query = iq_header + ','.join(str(x) for x in iq_rows[i * self.core.insert_query_max_lines:min(len(iq_rows), (i + 1) * self.core.insert_query_max_lines)]) + ';'
                         self.db.write_price_data(query_string=insert_query)
                 else:
                     if contract_instance.get_secType() == 'OPT':
-                        tprint(f'Writing no price data for {contract_instance.get_symbol()} {contract_instance.get_secType()} to database {contract_instance.get_table()} {contract_instance.get_right()} {contract_instance.get_strike()}.')
+                        tprint(f'Writing no new price data points for {contract_instance.get_symbol()} {contract_instance.get_secType()} to database {contract_instance.get_table()} {contract_instance.get_right()} {contract_instance.get_strike()}.')
                     else:
-                        tprint(f'Writing no price data for {contract_instance.get_symbol()} {contract_instance.get_secType()} to database {contract_instance.get_table()}.')
+                        tprint(f'Writing no new price data points for {contract_instance.get_symbol()} {contract_instance.get_secType()} to database {contract_instance.get_table()}.')
 
                 self.core.writable_pool.pop(0)
 
@@ -181,7 +181,7 @@ class PipelineHandler:
             print('Next print')
             while True:
                 try:
-                    print(1)
+                    #print(1)
                     self.tws_con.connect(self.core.host_ip, self.core.api_port, self.core.client_id) # TODO: Reconnection fails here.
                     print(2)
                     sleep(10)
@@ -190,4 +190,5 @@ class PipelineHandler:
                         break
                 except:
                     print(4)
+                    ...
         return True

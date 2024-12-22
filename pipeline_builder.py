@@ -1,4 +1,5 @@
 from collections import defaultdict
+from copy import deepcopy
 from datetime import datetime, time, timedelta
 from dotenv import load_dotenv, set_key
 from itertools import batched
@@ -9,10 +10,9 @@ import random
 from time import sleep
 from threading import Thread
 
-from ibapi.contract import Contract
-
 from contract_container import ContractContainer
 from core import tprint
+from list_updater import list_updater
 
 class PipelineBuilder:
     def __init__(self, core =None, tws_con=None, CC=None, DB=None):
@@ -33,6 +33,8 @@ class PipelineBuilder:
         self.debug_load: bool = False
 
         self.option_exp_max_length = 0
+
+        list_updater(self.core)
 
     def startup_build_sequence(self):
         """
@@ -82,9 +84,8 @@ class PipelineBuilder:
             :output:  self.core.contract_pool['STK'] :appending
 
             """
-        tprint('Building stock contracts...')
+        tprint('Building stock contracts...', )
         for symbol in self.core.underlying_list['STK']:
-
             stk = self.ContractContainer(self.core, symbol=symbol, secType='STK')
 
             stk.set_reqId_assign(self.core.reqId_1, reqType='reqConDetails')
@@ -93,6 +94,7 @@ class PipelineBuilder:
 
             while not stk.get_error_flag() and not stk.get_conId():
                 pass
+
             if stk.check_conId():
                 stk.set_reqId_assign(self.core.reqId_1, reqType='reqExpStr')
                 self.tws_con.reqSecDefOptParams(self.core.reqId_1, stk.get_symbol(), '', stk.get_secType(), stk.get_conId())
@@ -155,12 +157,20 @@ class PipelineBuilder:
         exp_options_loaded = False
         try:
             m_time = os.path.getmtime(self.core.exp_opt_file_name)
-            if (datetime.today() - datetime.fromtimestamp(m_time)) <= timedelta(days=3) and datetime.fromtimestamp(m_time).weekday() in [4, 5, 6]:
+            weekend_cond = (datetime.today() - datetime.fromtimestamp(m_time)) <= timedelta(hours=60) and datetime.fromtimestamp(m_time).weekday() in [4, 5, 6]
+            workday_cond = (datetime.today() - datetime.fromtimestamp(m_time)) <= timedelta(hours=18) and datetime.fromtimestamp(m_time).weekday() not in [4, 5, 6]
+            if weekend_cond or workday_cond:
                 with open(self.core.exp_opt_file_name, 'rb') as f:
                     self.core.contract_pool['EXP'] = pickle.load(f)
 
                 exp_options_loaded = True
                 tprint(f'Expired options loaded from {self.core.exp_opt_file_name}.')
+
+                for contract in self.core.contract_pool['EXP']:
+                    contract.reconnect_core_space(self.core)
+
+                tprint(f'Loaded expired contracts reconnected to Core space.')
+
         except FileNotFoundError:
             pass
 
@@ -257,7 +267,6 @@ class PipelineBuilder:
                 pass
 
             while len(self.core.immediate_pool) < self.core.ip_length:
-
                 if len(self.core.contract_pool['EXP']) > 0:
                     last_update = self.db.get_last_update(contract_container=self.core.contract_pool['EXP'][0], response=True)
                     expiry = self.core.contract_pool['EXP'][0].get_expiry(dt_object=True)
@@ -275,7 +284,16 @@ class PipelineBuilder:
 
                         if datetime.today().weekday() in [5, 6]:
                             with open(self.core.exp_opt_file_name, 'wb') as file:
-                                pickle.dump(self.core.contract_pool['EXP'], file)
+                                while True:
+                                    try:
+                                        save_contracts = deepcopy(self.core.contract_pool['EXP'])
+                                        pickle.dump(save_contracts, file)
+                                        tprint(f'Expired {len(self.core.contract_pool['EXP'])}options saved to {self.core.exp_opt_file_name}.')
+                                        # 0400 22Dec 299MB data. Is it appending instead of overwriting?
+                                        break
+                                    except RuntimeError:
+                                        tprint(f'Failed to save options. Trying again in 10 seconds...')
+                                        sleep(10)
 
                     if not self.core.contract_pool['EXP'] or len(self.core.contract_pool['EXP']) == 0:
                         self.core.exp_last_update = datetime.now().timestamp()
