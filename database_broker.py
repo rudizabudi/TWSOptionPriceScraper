@@ -115,12 +115,12 @@ class DatabaseBroker():
 
         if create_missing:
             if database_name not in self.table_structure.keys():
-                tprint(f'Database {database_name} created.')
+                tprint(f'New database created: {database_name}')
                 self.create_database(db_name=database_name)
                 self.fetch_all_table_names(database=database_name)
 
             if table_name not in self.table_structure[database_name]:
-                tprint(f'Table {table_name} created.')
+                tprint(f'New table created: {table_name}.')
                 self.create_table(db_name=database_name, table_name=table_name)
                 self.fetch_all_table_names(database=database_name)
 

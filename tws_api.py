@@ -4,7 +4,7 @@ from threading import Thread
 
 import time
 
-from core import tprint
+from core import tprint, ConnectionStatus
 
 class TWSCon(EWrapper, EClient):
 
@@ -15,29 +15,53 @@ class TWSCon(EWrapper, EClient):
         self.core = core
         self.core.no_contract = False
 
-        self.connect(core.host_ip, core.api_port, core.client_id)
+        tprint('Prebuild')
+        self.build_connection()
+        tprint('Postbuild')
         self.t: Thread = Thread(target=self.run)
         self.t.start()
-        time.sleep(1)
 
     def connectAck(self):
-        tprint('Connected.')
+        tprint('Connected TWS API.')
+        #tprint(self.core.__dir__())
+        self.core.connection_status = ConnectionStatus.CONNECTED
 
     def connectionClosed(self):
         tprint('Disconnected TWS API.')
+        self.core.connection_status = ConnectionStatus.DISCONNECTED
+        self.disconnect()
+        time.sleep(2)
+        self.build_connection()
 
     def error(self, reqId, errorCode, errorString):
         #print(errorCode, errorString)
         if errorCode in [162, 200]:
+            self.core.reqId_hashmap[reqId].__self__.set_error_flag(flag=True)
+
             #tprint(f'Error {reqId} - {errorCode}: {errorString}')
             #tprint(f'Error keys: {self.core.reqId_hashmap.keys()}')
-            self.core.reqId_hashmap[reqId].__self__.set_error_flag(flag=True)
             #try:
                 #tprint(f'Error keys: {self.core.reqId_hashmap.keys()}')
                 #self.core.reqId_hashmap[reqId].__self__.set_error_flag(flag=True)
             #except KeyError:
                 #tprint('Passed')
                 #pass
+
+    def build_connection(self):
+        print(123, self.core.connection_status.value)
+        while self.core.connection_status == ConnectionStatus.DISCONNECTED:
+            try:
+                print(1)
+                self.connect(self.core.host_ip, self.core.api_port, self.core.client_id)
+                print(2)
+                time.sleep(2)
+                if self.isConnected():
+                    print(3)
+                    break
+            except Exception as err:
+                print(4, self.isConnected(), err)
+                time.sleep(5)
+
 
     def historicalData(self, reqId, bar):
         if reqId not in self.core.reqId_hashmap.keys():

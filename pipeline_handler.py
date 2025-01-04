@@ -59,6 +59,10 @@ class PipelineHandler:
                 #tprint(f'Requesting prices for {contract_instance.get_symbol()} with last update {last_update} and duration {durationStr}')
                 contract_instance.set_reqId_assign(self.core.reqId_2, reqType='reqHistData')
                 query_time = datetime.today().strftime("%Y%m%d-%H:%M:%S")
+
+                while self.core.connection_status.value == 0: #TODO: Add this check to pipeline builder
+                    sleep(.1)
+
                 self.tws_con.reqHistoricalData( reqId=self.core.reqId_2,
                                                 contract=contract_instance.get_contract(),
                                                 endDateTime=query_time,
@@ -79,11 +83,11 @@ class PipelineHandler:
                 time_breaker = datetime.now() + timedelta(seconds=timeout_secs)
 
                 while not contract_instance.get_error_flag() and not contract_instance.get_historical_data_end() and datetime.now() < time_breaker:
-                    if datetime.now() >= time_breaker and self.tws_con.isConnected():
+                    if datetime.now() >= time_breaker and self.core.connection_status.value == 1:
                         # TODO: reschedule contract a couple of positions later
                         sleep(.1)
                         break
-                    self.connection_handler()
+                    #self.connection_handler()
                     pass
 
                 if contract_instance.get_historical_data_end():
@@ -181,14 +185,14 @@ class PipelineHandler:
             print('Next print')
             while True:
                 try:
-                    #print(1)
+                    print(1)
                     self.tws_con.connect(self.core.host_ip, self.core.api_port, self.core.client_id) # TODO: Reconnection fails here.
                     print(2)
                     sleep(10)
                     if self.tws_con.isConnected():
                         print(3)
                         break
-                except:
-                    print(4)
+                except Exception as err:
+                    print(4, self.tws_con.isConnected(),err)
                     ...
         return True

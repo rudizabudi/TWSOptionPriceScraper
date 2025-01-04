@@ -1,7 +1,7 @@
 from collections import defaultdict
 from copy import deepcopy
 from datetime import datetime, time, timedelta
-from dotenv import load_dotenv, set_key
+from dotenv import set_key
 from itertools import batched
 import os
 import pickle
@@ -25,14 +25,13 @@ class PipelineBuilder:
 
         self.db: DB = DB(core=self.core, CC=self.ContractContainer)
 
-        self.stk_sorter_pointer: int = 0
-
         self.t1: Thread = Thread(target=self.pipeline_sorter)
         self.t1.start()
 
         self.debug_load: bool = False
 
-        self.option_exp_max_length = 0
+        self.option_exp_max_length:int = 0
+        self.stk_sorter_pointer: int = 0
 
         list_updater(self.core)
 
@@ -59,8 +58,8 @@ class PipelineBuilder:
         last_scheduled_update = self.core.exp_update_timer - timedelta(days=1)
         if current_time < self.core.exp_update_timer.time() and self.core.exp_last_update < last_scheduled_update:
             self.get_exp_options()
-        elif datetime.today().weekday() in [5, 6]:
-            'expired_option_contracts.pkl'
+        # elif datetime.today().weekday() in [5, 6]:
+        #     'expired_option_contracts.pkl'
         else:
             tprint('Generating expired option list skipped because they are up2date.')
         self.option_exp_max_length = len(self.core.contract_pool['EXP'])
@@ -224,8 +223,7 @@ class PipelineBuilder:
                 with open(self.core.exp_opt_file_name, 'wb') as file:
                     pickle.dump(self.core.contract_pool['EXP'], file)
 
-            tprint(f'Expired options saved to {self.core.exp_opt_file_name}.')
-
+            tprint(f'{len(self.core.contract_pool['EXP'])} expired options saved to {self.core.exp_opt_file_name}.')
 
     def code_cemetery(self):
         print('Loading contract data')
@@ -277,6 +275,8 @@ class PipelineBuilder:
                     else:
                         self.core.contract_pool['EXP'].pop(0)
 
+                    #tprint(f'Expiry list new length {len(self.core.contract_pool["EXP"])}')
+
                     if len(self.core.contract_pool['EXP']) % 1000 == 0:
                         pct_done = ((self.option_exp_max_length - len(self.core.contract_pool['EXP'])) / self.option_exp_max_length) * 100
                         contracts_done = self.option_exp_max_length - len(self.core.contract_pool['EXP'])
@@ -288,11 +288,11 @@ class PipelineBuilder:
                                     try:
                                         save_contracts = deepcopy(self.core.contract_pool['EXP'])
                                         pickle.dump(save_contracts, file)
-                                        tprint(f'Expired {len(self.core.contract_pool['EXP'])}options saved to {self.core.exp_opt_file_name}.')
+                                        tprint(f'Expired {len(self.core.contract_pool['EXP'])} options saved to {self.core.exp_opt_file_name}.')
                                         # 0400 22Dec 299MB data. Is it appending instead of overwriting?
                                         break
                                     except RuntimeError:
-                                        tprint(f'Failed to save options. Trying again in 10 seconds...')
+                                        tprint(f'Failed to save expired options. Trying again in 10 seconds...')
                                         sleep(10)
 
                     if not self.core.contract_pool['EXP'] or len(self.core.contract_pool['EXP']) == 0:
@@ -341,6 +341,8 @@ class PipelineBuilder:
             if datetime.now().weekday() not in self.core.timer_exclude_days:
                 if datetime.now() >= self.core.stk_update_timer:
                     tprint('Stk update timer triggered.')
+                    tprint(f'Total stock contracts list length: {len(self.core.contract_pool["STK"])}')
+                    #self.build_stk_contracts()
                     self.core.stk_update_timer += timedelta(days=1)
                     self.stk_sorter_pointer = 0
                 elif datetime.now() >= self.core.exp_update_timer:

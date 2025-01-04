@@ -1,3 +1,4 @@
+from enum import Enum
 from datetime import datetime, timedelta
 from dotenv import load_dotenv
 import os
@@ -26,9 +27,7 @@ class Core:
 
         self.underlying_list: dict[str, list[str]] = {'STK': []}
 
-
-        self.contract_pool: dict[str, list[object]] = {
-                                                        'STK': [],
+        self.contract_pool: dict[str, list[object]] = { 'STK': [],
                                                         'OPT': [],
                                                         'EXP': []}
 
@@ -63,10 +62,13 @@ class Core:
         self.update_csv_path: str = os.getenv('UPDATE_CSV_PATH')
         self.extra_symbols: list[str] = os.getenv('EXTRA_SYMBOLS').split(',')
 
+        self.connection_status = ConnectionStatus.DISCONNECTED
 
-    def set_TWSCon(self, TWSCon):
-        self.TWSCon = TWSCon
-        print(123)
 
 def tprint(text: str = '', *args, **kwargs) -> str:
     print(f'{datetime.now().strftime('%H:%M:%S')} : {text}')
+
+
+class ConnectionStatus(Enum):
+    DISCONNECTED = 0
+    CONNECTED = 1
