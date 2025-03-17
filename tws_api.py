@@ -19,27 +19,19 @@ class TWSCon(EWrapper, EClient):
         self.reconnecting: bool = False
 
         self.t: Thread | None = None
-        self.thread_ready: Event = Event()
+        core.write_tws_connection(self)
+
         self.build_connection()
 
     def get_thread(self):
-        self.thread_ready.wait()
         return self.t
 
     def connectAck(self):
-        tprint(f'Connected to TWS API. {self.isConnected()}')
-        self.core.connection_status = ConnectionStatus.CONNECTED
-        self.reconnecting = False
+        tprint(f'Connected to TWS API.')
 
     def connectionClosed(self):
-        time.sleep(10)
         if not self.isConnected() and not self.reconnecting:
             tprint('Disconnected from TWS API.')
-            self.core.connection_status = ConnectionStatus.DISCONNECTED
-
-            if self.t and not self.reconnecting:
-                self.reconnecting = True
-                self.reconnect()
 
     def error(self, reqId, errorCode, errorString):
         tprint(f'Error: {errorCode} --> {errorString}', debug=True)
@@ -50,48 +42,20 @@ class TWSCon(EWrapper, EClient):
             tprint(f'Error thread: {self.get_instance_info(self.t)}, {self.isConnected()}', debug=True)
 
     def build_connection(self):
-        # try:
-        #     if self.t:
-        #         self.reconnecting = True
-        #         self.t.join()
-        #         tprint('Thread joined.', debug=True)
-        # except Exception as err:
-        #     print(err)
+        while True:
+            try:
+                self.connect(self.core.host_ip, self.core.api_port, self.core.client_id)
+                time.sleep(2)
+                self.t: Thread = Thread(target=self.run)
+                self.t.start()
+                time.sleep(10)
 
-        while self.core.connection_status == ConnectionStatus.DISCONNECTED:
-            self.connect(self.core.host_ip, self.core.api_port, self.core.client_id)
-            time.sleep(2)
-            self.t: Thread = Thread(target=self.run)
-            self.t.start()
-            time.sleep(2)
-            #self.thread_ready.set()
+                if self.isConnected():
+                    #self.core.connection_status = ConnectionStatus.CONNECTED
+                    break
 
-            if self.isConnected():
-                break
-
-    def reconnect(self):
-        while not self.isConnected():
-            tprint('Reconnecting...')
-            self.connect(self.core.host_ip, self.core.api_port, self.core.client_id)
-            time.sleep(2)
-
-        tprint(f'Reconnected successfully.', debug=True)
-        old_t = self.t
-        tprint(f'Old_t1: {self.get_instance_info(old_t)}, {self.isConnected()}', debug=True)
-        time.sleep(2)
-        # self.t: Thread = Thread(target=self.run)
-        # self.t.start()
-        # time.sleep(2)
-        tprint(f'Old_t2: {self.get_instance_info(old_t)}', debug=True)
-        tprint(f'New_t: {self.get_instance_info(self.t)}, {self.isConnected()}', debug=True)
-        tprint(f'Current API Class object: {self}', debug=True)
-
-        #self.thread_ready.set()
-        self.reconnecting = False
-        tprint(f'Reconnecting set False', debug=True)
-        time.sleep(5)
-        tprint(f'New_t2: {self.get_instance_info(self.t)}, {self.isConnected()}', debug=True)
-
+            except AttributeError as e:
+                tprint(f'Attribute error: {e}', debug=True)
 
     def get_instance_info(self, t=None):
         if not t:

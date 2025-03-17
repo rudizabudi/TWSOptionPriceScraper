@@ -50,65 +50,55 @@ class PipelineHandler:
         tprint('Requesting prices...')
         while True:
             try:
-                if self.core.connection_status == ConnectionStatus.CONNECTED:
-                    tprint(f'PH 1: {self.tws_con}', debug=True)
+                contract_instance = self.core.immediate_pool[0]
+                last_update = contract_instance.get_last_update()
+                last_update = last_update if last_update else datetime(year=datetime.today().year - 2, month=1, day=1)
 
-                    contract_instance = self.core.immediate_pool[0]
-                    last_update = contract_instance.get_last_update()
-                    last_update = last_update if last_update else datetime(year=datetime.today().year - 2, month=1, day=1)
+                duration = max(floor((datetime.now() - last_update) / timedelta(days=7) + 1), 1)
 
-                    duration = max(floor((datetime.now() - last_update) / timedelta(days=7) + 1), 1)
+                if duration > 52:
+                    duration_str = f'{ceil(duration / 52)} Y'
+                elif duration <= 52:
+                    duration_str = f'{duration} W'
+                else:
+                    raise Exception(f'Invalid duration: {duration}')
 
-                    if duration > 52:
-                        duration_str = f'{ceil(duration / 52)} Y'
-                    elif duration <= 52:
-                        duration_str = f'{duration} W'
-                    else:
-                        raise Exception(f'Invalid duration: {duration}')
+                contract_instance.set_reqId_assign(self.core.reqId_2, reqType='reqHistData')
+                query_time = datetime.today().strftime("%Y%m%d-%H:%M:%S")
 
-                    #tprint(f'Requesting prices for {contract_instance.get_symbol()} with last update {last_update} and duration {durationStr}')
-                    contract_instance.set_reqId_assign(self.core.reqId_2, reqType='reqHistData')
-                    query_time = datetime.today().strftime("%Y%m%d-%H:%M:%S")
+                self.tws_con.reqHistoricalData( reqId=self.core.reqId_2,
+                                                contract=contract_instance.get_contract(),
+                                                endDateTime=query_time,
+                                                durationStr=duration_str,
+                                                barSizeSetting=self.core.candle_length,
+                                                whatToShow="Bid_Ask",
+                                                useRTH=1,
+                                                formatDate=1,
+                                                keepUpToDate=False,
+                                                chartOptions=[])
 
-                    tprint(f'PH 1.1', debug=True)
+                self.core.reqId_2 += 1
+                timeout_secs = 60
+                for k in self.core.timeout_breaker.keys():
+                    if duration <= k: timeout_secs = self.core.timeout_breaker[k]
+                time_breaker = datetime.now() + timedelta(seconds=timeout_secs)
+                while not contract_instance.get_error_flag() and not contract_instance.get_historical_data_end() and datetime.now() < time_breaker:
+                    if not self.core.tws_con.isConnected():
+                        while not self.tws_con.isConnected():
+                            self.tws_con = self.core.tws_con
+                            sleep(10)
+                        break
+                    sleep(.1)
+                if contract_instance.get_historical_data_end():
+                    self.core.writable_pool.append(contract_instance)
 
-                    self.tws_con.reqHistoricalData( reqId=self.core.reqId_2,
-                                                    contract=contract_instance.get_contract(),
-                                                    endDateTime=query_time,
-                                                    durationStr=duration_str,
-                                                    barSizeSetting=self.core.candle_length,
-                                                    whatToShow="Bid_Ask",
-                                                    useRTH=1,
-                                                    formatDate=1,
-                                                    keepUpToDate=False,
-                                                    chartOptions=[])
-
-                    #tprint(f'Requesting prices for {contract_instance.get_symbol()} with last update {last_update} and duration {duration_str}')
-                    self.core.reqId_2 += 1
-                    tprint(f'PH 1.2', debug=True)
-                    timeout_secs = 60
-                    for k in self.core.timeout_breaker.keys():
-                        if duration <= k: timeout_secs = self.core.timeout_breaker[k]
-                    time_breaker = datetime.now() + timedelta(seconds=timeout_secs)
-                    tprint(f'PH 1.3', debug=True)
-                    while not contract_instance.get_error_flag() and not contract_instance.get_historical_data_end() and datetime.now() < time_breaker:
-                        if self.core.connection_status == ConnectionStatus.DISCONNECTED:
-                            # TODO: reschedule contract a couple of positions later
-                            tprint('TWS API disconnected during waiting for data.')
-                            break
-                        sleep(.1)
-                    tprint(f'PH 1.4', debug=True)
-                    if contract_instance.get_historical_data_end():
-                        tprint(f'PH 1.5', debug=True)
-                        self.core.writable_pool.append(contract_instance)
-
-                    self.core.immediate_pool.pop(0)
+                self.core.immediate_pool.pop(0)
 
             except IndexError:
                 while len(self.core.immediate_pool) == 0:
                     sleep(.1)
             except Exception as e:
-                tprint(f'Unhandled exception: {e}')
+                tprint(f'Unhandled exception: {e} {traceback.format_exc()}', debug=True)
 
     def write_to_database(self):
         """

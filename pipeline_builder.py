@@ -287,7 +287,7 @@ class PipelineBuilder:
                 pass
 
             while len(self.core.immediate_pool) < self.core.ip_length:
-                tprint(f'Primal pool lengths: {len(self.core.contract_pool["STK"]), self.stk_sorter_pointer, len(self.core.contract_pool["OPT"]), len(self.core.contract_pool["EXP"]), len(self.core.immediate_pool)}')
+                tprint(f'Primal pool lengths: {len(self.core.contract_pool["STK"]), self.stk_sorter_pointer, len(self.core.contract_pool["OPT"]), len(self.core.contract_pool["EXP"]), len(self.core.immediate_pool)}', debug=True)
                 if len(self.core.contract_pool['EXP']) > 0:
                     last_update = self.db.get_last_update(contract_container=self.core.contract_pool['EXP'][0], response=True)
                     expiry = self.core.contract_pool['EXP'][0].get_expiry(dt_object=True)
@@ -297,8 +297,6 @@ class PipelineBuilder:
                         self.core.immediate_pool.append(self.core.contract_pool['EXP'].pop(0))
                     else:
                         self.core.contract_pool['EXP'].pop(0)
-
-                    #tprint(f'Expiry list new length {len(self.core.contract_pool["EXP"])}')
 
                     if len(self.core.contract_pool['EXP']) % 1000 == 0:
                         pct_done = ((self.option_exp_max_length - len(self.core.contract_pool['EXP'])) / self.option_exp_max_length) * 100

@@ -6,7 +6,7 @@ import os
 DEBUG_MODE: bool = False
 
 class Core:
-    def __init__(self, TWSCon):
+    def __init__(self):
         load_dotenv('.env')
 
         self.host_ip: str = os.getenv('HOST_IP')
@@ -65,10 +65,14 @@ class Core:
 
         self.connection_status = ConnectionStatus.DISCONNECTED
 
-        self.tws_con = self.build_tws_connection(TWSCon)
+        #self.tws_con = self.build_tws_connection(TWSCon)
 
     def build_tws_connection(self, TWSCon):
         return TWSCon(core=self)
+
+    def write_tws_connection(self, TWSCon):
+        self.tws_con = TWSCon
+
 
 def tprint(text: str = '', *args, debug: bool = False, **kwargs):
     if (debug and DEBUG_MODE) or not debug:
