@@ -1,3 +1,6 @@
+from threading import Thread
+import time
+
 from contract_container import ContractContainer
 from core import Core
 from database_broker import DatabaseBroker
@@ -5,18 +8,26 @@ from pipeline_builder import PipelineBuilder
 from pipeline_handler import PipelineHandler
 from tws_api import TWSCon
 
+from core import ConnectionStatus
 
 if __name__ == '__main__':
     def main():
-        core = Core()
+        core = Core(TWSCon)
 
-        tws_con = TWSCon(core)
+        while not core.tws_con:
+            time.sleep(.1)
 
-        pl_builder = PipelineBuilder(core=core, tws_con=tws_con, CC=ContractContainer, DB=DatabaseBroker)
-        pl_handler = PipelineHandler(core=core, tws_con=tws_con, CC=ContractContainer, DB=DatabaseBroker)
+        pl_builder = PipelineBuilder(core=core, CC=ContractContainer, DB=DatabaseBroker)
 
         pl_builder.startup_build_sequence()
 
+        ph = None
+        while True:
+            if core.connection_status == ConnectionStatus.DISCONNECTED and ph:
+                ph = None
+            if core.connection_status == ConnectionStatus.CONNECTED and not ph:
+                ph = PipelineHandler(core=core,  CC=ContractContainer, DB=DatabaseBroker)
+            time.sleep(10)
     main()
 
 """

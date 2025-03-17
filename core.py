@@ -3,9 +3,10 @@ from datetime import datetime, timedelta
 from dotenv import load_dotenv
 import os
 
+DEBUG_MODE: bool = False
 
 class Core:
-    def __init__(self):
+    def __init__(self, TWSCon):
         load_dotenv('.env')
 
         self.host_ip: str = os.getenv('HOST_IP')
@@ -64,11 +65,17 @@ class Core:
 
         self.connection_status = ConnectionStatus.DISCONNECTED
 
+        self.tws_con = self.build_tws_connection(TWSCon)
 
-def tprint(text: str = '', *args, **kwargs) -> str:
-    print(f'{datetime.now().strftime('%H:%M:%S')} : {text}')
+    def build_tws_connection(self, TWSCon):
+        return TWSCon(core=self)
+
+def tprint(text: str = '', *args, debug: bool = False, **kwargs):
+    if (debug and DEBUG_MODE) or not debug:
+        print(f'{datetime.now().strftime('%H:%M:%S')} : {text}')
 
 
 class ConnectionStatus(Enum):
     DISCONNECTED = 0
     CONNECTED = 1
+    RECONNECTING = 2

@@ -55,7 +55,10 @@ class ContractContainer:
         #TODO: Alternative trigger "import Core" again within a method
         return value
 
-    def reconnect_core_space(self, core):
+    def disconnect_core_space(self):
+        self.core = None
+
+    def connect_core_space(self, core):
         self.core = core
 
     def build_contract(self, **kwargs):
@@ -70,8 +73,8 @@ class ContractContainer:
             self.contract.right = kwargs['right'] if 'right' in kwargs.keys() else None
             self.contract.lastTradeDateOrContractMonth = kwargs['lastTradeDateOrContractMonth'] if 'lastTradeDateOrContractMonth' in kwargs.keys() else None
 
-    def get_last_price(self) -> float:
-        return self.price_data[list(self.price_data.keys())[-1]][0]
+    # def get_last_price(self) -> float:
+    #     return self.price_data[list(self.price_data.keys())[-1]][0]
 
     def get_price_data(self) -> dict[datetime, list]:
         return self.price_data
@@ -108,7 +111,7 @@ class ContractContainer:
     def get_symbol(self) -> str:
         return self.contract.symbol
 
-    def get_expiries(self, ** kwargs) -> list[int]:
+    def get_expiries(self, ** kwargs) -> list[int | None]:
         if self.contract.secType != 'STK':
             raise Exception(f'Expiry lists only available for contract instances of secType STK. Requested {self.contract.symbol} of type {self.contract.secType}.')
         elif not self.expiries:

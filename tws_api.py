@@ -1,10 +1,11 @@
 from ibapi.client import EClient
 from ibapi.wrapper import EWrapper
-from threading import Thread
+from threading import Thread, Event, current_thread
 
 import time
 
 from core import tprint, ConnectionStatus
+
 
 class TWSCon(EWrapper, EClient):
 
@@ -15,53 +16,92 @@ class TWSCon(EWrapper, EClient):
         self.core = core
         self.core.no_contract = False
 
-        tprint('Prebuild')
+        self.reconnecting: bool = False
+
+        self.t: Thread | None = None
+        self.thread_ready: Event = Event()
         self.build_connection()
-        tprint('Postbuild')
-        self.t: Thread = Thread(target=self.run)
-        self.t.start()
+
+    def get_thread(self):
+        self.thread_ready.wait()
+        return self.t
 
     def connectAck(self):
-        tprint('Connected TWS API.')
-        #tprint(self.core.__dir__())
+        tprint(f'Connected to TWS API. {self.isConnected()}')
         self.core.connection_status = ConnectionStatus.CONNECTED
+        self.reconnecting = False
 
     def connectionClosed(self):
-        tprint('Disconnected TWS API.')
-        self.core.connection_status = ConnectionStatus.DISCONNECTED
-        self.disconnect()
-        time.sleep(2)
-        self.build_connection()
+        time.sleep(10)
+        if not self.isConnected() and not self.reconnecting:
+            tprint('Disconnected from TWS API.')
+            self.core.connection_status = ConnectionStatus.DISCONNECTED
+
+            if self.t and not self.reconnecting:
+                self.reconnecting = True
+                self.reconnect()
 
     def error(self, reqId, errorCode, errorString):
-        #print(errorCode, errorString)
+        tprint(f'Error: {errorCode} --> {errorString}', debug=True)
         if errorCode in [162, 200]:
             self.core.reqId_hashmap[reqId].__self__.set_error_flag(flag=True)
 
-            #tprint(f'Error {reqId} - {errorCode}: {errorString}')
-            #tprint(f'Error keys: {self.core.reqId_hashmap.keys()}')
-            #try:
-                #tprint(f'Error keys: {self.core.reqId_hashmap.keys()}')
-                #self.core.reqId_hashmap[reqId].__self__.set_error_flag(flag=True)
-            #except KeyError:
-                #tprint('Passed')
-                #pass
+        if errorCode == 504:
+            tprint(f'Error thread: {self.get_instance_info(self.t)}, {self.isConnected()}', debug=True)
 
     def build_connection(self):
-        print(123, self.core.connection_status.value)
-        while self.core.connection_status == ConnectionStatus.DISCONNECTED:
-            try:
-                print(1)
-                self.connect(self.core.host_ip, self.core.api_port, self.core.client_id)
-                print(2)
-                time.sleep(2)
-                if self.isConnected():
-                    print(3)
-                    break
-            except Exception as err:
-                print(4, self.isConnected(), err)
-                time.sleep(5)
+        # try:
+        #     if self.t:
+        #         self.reconnecting = True
+        #         self.t.join()
+        #         tprint('Thread joined.', debug=True)
+        # except Exception as err:
+        #     print(err)
 
+        while self.core.connection_status == ConnectionStatus.DISCONNECTED:
+            self.connect(self.core.host_ip, self.core.api_port, self.core.client_id)
+            time.sleep(2)
+            self.t: Thread = Thread(target=self.run)
+            self.t.start()
+            time.sleep(2)
+            #self.thread_ready.set()
+
+            if self.isConnected():
+                break
+
+    def reconnect(self):
+        while not self.isConnected():
+            tprint('Reconnecting...')
+            self.connect(self.core.host_ip, self.core.api_port, self.core.client_id)
+            time.sleep(2)
+
+        tprint(f'Reconnected successfully.', debug=True)
+        old_t = self.t
+        tprint(f'Old_t1: {self.get_instance_info(old_t)}, {self.isConnected()}', debug=True)
+        time.sleep(2)
+        # self.t: Thread = Thread(target=self.run)
+        # self.t.start()
+        # time.sleep(2)
+        tprint(f'Old_t2: {self.get_instance_info(old_t)}', debug=True)
+        tprint(f'New_t: {self.get_instance_info(self.t)}, {self.isConnected()}', debug=True)
+        tprint(f'Current API Class object: {self}', debug=True)
+
+        #self.thread_ready.set()
+        self.reconnecting = False
+        tprint(f'Reconnecting set False', debug=True)
+        time.sleep(5)
+        tprint(f'New_t2: {self.get_instance_info(self.t)}, {self.isConnected()}', debug=True)
+
+
+    def get_instance_info(self, t=None):
+        if not t:
+            t = self.t
+
+        info = {'thread_name': t.name,
+                'connection_value': self.core.connection_status.value,
+                'thread_id': t.ident,
+                'thread_alive': t.is_alive()}
+        return info
 
     def historicalData(self, reqId, bar):
         if reqId not in self.core.reqId_hashmap.keys():
@@ -84,4 +124,23 @@ class TWSCon(EWrapper, EClient):
             raise KeyError('ReqId not assigned to an security class instance.')
 
         self.core.reqId_hashmap[reqId](contractDetails.contract.conId)
+
+# @deprecated
+def connection_loop(core):
+    tws_thread: Thread | None = None
+    while True:
+        if core.connection_status == ConnectionStatus.DISCONNECTED:
+            tprint('Connection loop condition met. ' + str(tws_thread))
+            if tws_thread:
+                time.sleep(5)
+                tprint('Old thread to be joined.')
+                tws_thread.join()
+                tprint('Connection loop old thread joined.')
+
+            core.tws_con = TWSCon(core=core)
+            tws_thread = core.tws_con.get_thread()
+            tprint(f'Connection thread started.' + str(tws_thread))
+
+        time.sleep(10)
+
 

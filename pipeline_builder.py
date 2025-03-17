@@ -15,15 +15,16 @@ from core import tprint
 from list_updater import list_updater
 
 class PipelineBuilder:
-    def __init__(self, core =None, tws_con=None, CC=None, DB=None):
-        if None in (core, tws_con, CC, DB):
+    def __init__(self, core =None, CC=None, DB=None):
+        if None in (core, CC, DB):
             raise Exception('<PipelineBuilder INIT> All parameters must be specified.')
 
         self.core: core = core
-        self.tws_con: tws_con = tws_con
         self.ContractContainer: ContractContainer = CC
 
         self.db: DB = DB(core=self.core, CC=self.ContractContainer)
+
+        self.tws_con = core.tws_con
 
         self.t1: Thread = Thread(target=self.pipeline_sorter)
         self.t1.start()
@@ -56,6 +57,7 @@ class PipelineBuilder:
 
         current_time = datetime.now().time()
         last_scheduled_update = self.core.exp_update_timer - timedelta(days=1)
+        print(current_time < self.core.exp_update_timer.time(), self.core.exp_update_timer.time(), self.core.exp_last_update < last_scheduled_update, self.core.exp_last_update, last_scheduled_update)
         if current_time < self.core.exp_update_timer.time() and self.core.exp_last_update < last_scheduled_update:
             self.get_exp_options()
         # elif datetime.today().weekday() in [5, 6]:
@@ -83,6 +85,7 @@ class PipelineBuilder:
             :output:  self.core.contract_pool['STK'] :appending
 
             """
+
         tprint('Building stock contracts...', )
         for symbol in self.core.underlying_list['STK']:
             stk = self.ContractContainer(self.core, symbol=symbol, secType='STK')
@@ -166,11 +169,11 @@ class PipelineBuilder:
                 tprint(f'Expired options loaded from {self.core.exp_opt_file_name}.')
 
                 for contract in self.core.contract_pool['EXP']:
-                    contract.reconnect_core_space(self.core)
+                    contract.connect_core_space(self.core)
 
                 tprint(f'Loaded expired contracts reconnected to Core space.')
 
-        except FileNotFoundError:
+        except (FileNotFoundError, EOFError):
             pass
 
         if not exp_options_loaded:
@@ -217,13 +220,32 @@ class PipelineBuilder:
             tprint('Getting expired option contracts ended.')
 
             save_exp_options = True
-            if save_exp_options:
-                with open(self.core.exp_opt_file_name, 'wb') as file:
-                    pass
-                with open(self.core.exp_opt_file_name, 'wb') as file:
-                    pickle.dump(self.core.contract_pool['EXP'], file)
+            options_saved = False
+            while save_exp_options and not options_saved:
+                try:
+                    if save_exp_options:
 
-            tprint(f'{len(self.core.contract_pool['EXP'])} expired options saved to {self.core.exp_opt_file_name}.')
+                        save_contracts = []
+                        for contract in self.core.contract_pool['EXP']:
+                            contract.disconnect_core_space()
+                            save_contracts.append(contract)
+
+                        with open(self.core.exp_opt_file_name, 'wb') as file:
+                            pass
+
+                        with open(self.core.exp_opt_file_name, 'wb') as file:
+                            pickle.dump(save_contracts, file)
+
+                        for contract in self.core.contract_pool['EXP']:
+                            contract.connect_core_space(self.core)
+
+                        options_saved = True
+                        tprint(f'{len(self.core.contract_pool['EXP'])} expired options saved to {self.core.exp_opt_file_name}.')
+
+                except TypeError as e:
+                    tprint(f'Error saving expired options to {self.core.exp_opt_file_name}. Try again in 10 secs...')
+                    sleep(10)
+
 
     def code_cemetery(self):
         print('Loading contract data')
@@ -265,6 +287,7 @@ class PipelineBuilder:
                 pass
 
             while len(self.core.immediate_pool) < self.core.ip_length:
+                tprint(f'Primal pool lengths: {len(self.core.contract_pool["STK"]), self.stk_sorter_pointer, len(self.core.contract_pool["OPT"]), len(self.core.contract_pool["EXP"]), len(self.core.immediate_pool)}')
                 if len(self.core.contract_pool['EXP']) > 0:
                     last_update = self.db.get_last_update(contract_container=self.core.contract_pool['EXP'][0], response=True)
                     expiry = self.core.contract_pool['EXP'][0].get_expiry(dt_object=True)
@@ -286,12 +309,19 @@ class PipelineBuilder:
                             with open(self.core.exp_opt_file_name, 'wb') as file:
                                 while True:
                                     try:
-                                        save_contracts = deepcopy(self.core.contract_pool['EXP'])
+                                        save_contracts = []
+                                        for contract in self.core.contract_pool['EXP']:
+                                            contract.disconnect_core_space()
+                                            save_contracts.append(contract)
+
                                         pickle.dump(save_contracts, file)
                                         tprint(f'Expired {len(self.core.contract_pool['EXP'])} options saved to {self.core.exp_opt_file_name}.')
-                                        # 0400 22Dec 299MB data. Is it appending instead of overwriting?
+
+                                        for contract in self.core.contract_pool['EXP']:
+                                            contract.connect_core_space(self.core)
+
                                         break
-                                    except RuntimeError:
+                                    except RuntimeError as e:
                                         tprint(f'Failed to save expired options. Trying again in 10 seconds...')
                                         sleep(10)
 
@@ -300,7 +330,6 @@ class PipelineBuilder:
                         set_key(dotenv_path='.env', key_to_set='EXP_LAST_UPDATE', value_to_set=str(self.core.exp_last_update))
 
                 elif len(self.core.contract_pool['STK'][self.stk_sorter_pointer:]) > 0:
-                    #tprint('Adding from STK.')
                     self.db.check_table_exists(contract_container=self.core.contract_pool['STK'][self.stk_sorter_pointer], create_missing=True)
                     self.core.immediate_pool.append(self.core.contract_pool['STK'][self.stk_sorter_pointer])
                     #self.core.immediate_pool.append(self.core.contract_pool['STK'].pop(0))
@@ -312,25 +341,19 @@ class PipelineBuilder:
 
                 elif self.core.contract_pool['OPT'] and len(self.core.contract_pool['OPT']) > 0:
                     self.db.check_table_exists(contract_container=self.core.contract_pool['OPT'][0], create_missing=True)
-                    #tprint(f'OPT check')
                     last_update = self.db.get_last_update(contract_container=self.core.contract_pool['OPT'][0], response=True)
                     expiry = self.core.contract_pool['OPT'][0].get_expiry(dt_object=True)
 
                     if expiry > datetime.now():
                         if last_update and not (datetime.now() - last_update) < max(0.5 * (expiry - datetime.now()), timedelta(days=30)):
-                            #tprint('Adding from OPT1.')
                             self.core.immediate_pool.append(self.core.contract_pool['OPT'].pop(0))
                         elif last_update and last_update < expiry + timedelta(hours=21, minutes=45):
-                            #tprint('Adding from OPT2.')
                             self.core.contract_pool['OPT'].pop(0)
                         elif not last_update:
-                            #tprint('Adding from OPT3.')
                             self.core.immediate_pool.append(self.core.contract_pool['OPT'].pop(0))
                         else:
-                            #tprint('Adding from OPT4.')
                             self.core.contract_pool['OPT'] = self.core.contract_pool['OPT'][1:].append(self.core.contract_pool['OPT'][0])
                     else:
-                        #tprint('Adding from OPT5.')
                         self.core.contract_pool['OPT'] = self.core.contract_pool['OPT'][1:] + [self.core.contract_pool['OPT'][0]]
 
                 if len(self.core.contract_pool["OPT"]) % 1000 == 0:
@@ -341,7 +364,6 @@ class PipelineBuilder:
             if datetime.now().weekday() not in self.core.timer_exclude_days:
                 if datetime.now() >= self.core.stk_update_timer:
                     tprint('Stk update timer triggered.')
-                    tprint(f'Total stock contracts list length: {len(self.core.contract_pool["STK"])}')
                     #self.build_stk_contracts()
                     self.core.stk_update_timer += timedelta(days=1)
                     self.stk_sorter_pointer = 0

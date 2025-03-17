@@ -1,0 +1,17 @@
+[project]
+name = "twsoptionscraperv3"
+version = "0.1.0"
+description = "Writes tws gateway historic option pricing data into tsql database"
+readme = "README.md"
+requires-python = ">=3.12"
+
+dependencies = [
+    "ibapi>=9.81.1.post1",
+    "pyodbc>=5.2.0",
+    "python-dotenv>=1.0.1",
+    "requests>=2.32.3",
+    "typing-extensions>=4.12.2",
+]
+
+[tool.uv.workspace]
+members = ["TWSOptionScraperv3", "TWSOptionScraperV3"]

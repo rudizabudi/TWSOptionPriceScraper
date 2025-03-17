@@ -27,21 +27,19 @@ class DatabaseBroker():
     def sql_query(func) -> object:
         def con_wrapper(self, *args, **kwargs):
             sql_con: pyodbc.Connection = pyodbc.connect(self.connection_string)
-            #print(f'Con opened for {func.__name__}')
-
+            #tprint(f'Con opened for {func.__name__}')
             cursor: pyodbc.Cursor = sql_con.cursor()
-            # print('Cursor opened')
-            # print('Args', args)
-            # print('Kwargs', kwargs)
+            # tprint('Args', args)
+            # tprint('Kwargs', kwargs)
+
             result = func(self, cursor = cursor, con = sql_con, *args, **kwargs) or {}
 
             if isinstance(result, dict) and 'commit' in result.keys():
                 sql_con.commit()
 
             cursor.close()
-            #print('Cursor closed')
             sql_con.close()
-            #print('Con closed')
+            #tprint('Con closed')
 
             return result['data'] if isinstance(result, dict) and 'commit' in result.keys() else None
 
@@ -266,9 +264,16 @@ class DatabaseBroker():
 
         return {'data': existing_dates, 'commit': False}
 
+    @sql_query
+    def split_table(self, cursor, db_name: str = None, **kwargs):
+        if db_name is None:
+            raise ValueError('Database name must be provided.')
+        query = f'SELECT * FROM [{db_name}]'
+        cursor.execute(query)
+
     # @staticmethod
-    # def check_contract_type(contract):
-    #     if not isinstance(contract, "ContractContainer"):
-    #         raise TypeError('Contract must be an instance of the contract class.')
+        # def check_contract_type(contract):
+        #     if not isinstance(contract, "ContractContainer"):
+        #         raise TypeError('Contract must be an instance of the contract class.')
 
 
