@@ -31,13 +31,14 @@ class ContractContainer:
 
         self.db = DatabaseBroker(self.core, self)
 
-    def __str__(self) -> str:
+    def __str__(self) -> str | None:
         match self.contract.secType:
             case 'STK':
                 return f'<Data Container Instance> {self.contract.symbol} {self.contract.secType}'
             case 'OPT':
                 dt_s: str = datetime.strptime(self.contract.lastTradeDateOrContractMonth, "%Y%m%d").strftime("%d%b%y")
                 return f'<Data Container Instance> {self.contract.symbol} {self.contract.strike}{self.contract.right} {dt_s} {self.contract.secType}'
+        return None
 
     def deconstruct(self):
         match self.contract.secType:

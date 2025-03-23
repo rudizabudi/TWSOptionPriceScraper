@@ -1,9 +1,10 @@
-import os
-from dotenv import load_dotenv
-import pyodbc
-from datetime import datetime, timedelta
-import requests
 import csv
+from datetime import datetime, timedelta
+from dotenv import load_dotenv
+import os
+import pyodbc
+import requests
+
 from core import tprint
 
 load_dotenv('.env')
@@ -12,8 +13,6 @@ load_dotenv('.env')
 sql_server: str = os.getenv('SQL_SERVER')
 sql_user: str = os.getenv('SQL_USER')
 sql_password: str = os.getenv('SQL_PASSWORD')
-
-grace_period = 30  # update after SPX leave
 
 
 def list_updater(core):
