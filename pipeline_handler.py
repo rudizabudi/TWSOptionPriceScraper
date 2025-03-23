@@ -66,6 +66,7 @@ class PipelineHandler:
                 contract_instance.set_reqId_assign(self.core.reqId_2, reqType='reqHistData')
                 query_time = datetime.today().strftime("%Y%m%d-%H:%M:%S")
 
+                self.core.last_request = datetime.now()
                 self.tws_con.reqHistoricalData( reqId=self.core.reqId_2,
                                                 contract=contract_instance.get_contract(),
                                                 endDateTime=query_time,
@@ -176,21 +177,3 @@ class PipelineHandler:
                 while len(self.core.writable_pool) == 0:
                     sleep(.1)
 
-    #@deprecated
-    def connection_handler(self) -> bool:
-        if not self.tws_con.isConnected():
-            print('Disconnected Connection Handler')
-            print('Next print')
-            while True:
-                try:
-                    print(1)
-                    self.tws_con.connect(self.core.host_ip, self.core.api_port, self.core.client_id) # TODO: Reconnection fails here.
-                    print(2)
-                    sleep(10)
-                    if self.tws_con.isConnected():
-                        print(3)
-                        break
-                except Exception as err:
-                    print(4, self.tws_con.isConnected(),err)
-                    ...
-        return True

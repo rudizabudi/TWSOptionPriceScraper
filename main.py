@@ -1,7 +1,5 @@
 from datetime import datetime, timedelta
-import psutil
-from threading import Thread
-import time
+from time import sleep
 
 from contract_container import ContractContainer
 from core import Core
@@ -10,7 +8,6 @@ from pipeline_builder import PipelineBuilder
 from pipeline_handler import PipelineHandler
 from tws_api import TWSCon
 
-from core import ConnectionStatus, tprint
 
 if __name__ == '__main__':
     def main():
@@ -18,43 +15,25 @@ if __name__ == '__main__':
         tws_con = TWSCon(core=core)
 
         while not core.tws_con:
-            time.sleep(.1)
+            sleep(.1)
 
         pl_builder = PipelineBuilder(core=core, CC=ContractContainer, DB=DatabaseBroker)
-
         pl_builder.startup_build_sequence()
-        PipelineHandler(core=core, CC=ContractContainer, DB=DatabaseBroker)
+
+        pl_handler = PipelineHandler(core=core, CC=ContractContainer, DB=DatabaseBroker)
 
         while True:
-            # if core.connection_status == ConnectionStatus.DISCONNECTED and ph:
-            #     tprint('Main cond 1')
-            #     ph = None
-            # if core.connection_status == ConnectionStatus.CONNECTED and not ph:
-            #     tprint('Main cond 2')
-            #     ph = PipelineHandler(core=core,  CC=ContractContainer, DB=DatabaseBroker)
-
             if not tws_con.isConnected():
-                # tprint('Waiting for ibgateway to launch...')
-                # while len(list(filter(lambda x: x.name() == 'ibgateway.exe', psutil.process_iter()))) == 0:
-                #     time.sleep(1)
-                # tprint('Ibgateway has launched.')
-                #
-                # ibgt_process = list(filter(lambda x: x.name() == 'ibgateway.exe', psutil.process_iter()))[0]
-                # launch_offset = 30
-                #
-                # wait_time = datetime.fromtimestamp(ibgt_process.create_time()) + timedelta(seconds=launch_offset)
-                # tprint(f'Main cond 3.0 {tws_con_thread.is_alive()}, {tws_con.isConnected()}, {core.connection_status} ')
-                #
-                # while datetime.now() < wait_time:
-                #     time.sleep(1)
 
-                tws_con = None
                 core.write_tws_connection(tws_con)
 
                 tws_con = TWSCon(core=core)
-                time.sleep(10)
+                if core.last_request - core.last_receive > timedelta(seconds=core.glitch_detector_threshold):
+                    raise Warning(f'TWS API might not send data any longer.')
 
-            time.sleep(10)
+                sleep(10)
+
+            sleep(10)
 
     main()
 
@@ -63,5 +42,10 @@ TODO: Make SQL query f-strings injection proof
 TODO: Adapt local time conditions to UTC. Make TZ aware
 TODO: Fix odd stocks like BRK.B or ABNB.
 TODO: Improve logical load vs rebuild logic
-TODO: Long-term: Switch from MSQL to InfluxDB
+TODO: Long-term: Switch from MSQL to InfluxDB/postgresql
+TODO: Add TWS Gateway restart in main.py loop if it's not responding/glitching
+TODO: Switch from threading to Python3.13 open GIL 
+TODO: Make constituents check and option_list_creation (-> new SQL tables) periodical
+TODO: Containerize anew
 """
+

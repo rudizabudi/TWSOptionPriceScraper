@@ -1,5 +1,5 @@
 [project]
-name = "twsoptionscraperv3"
+name = "tws_option_scraper_v3"
 version = "0.1.0"
 description = "Writes tws gateway historic option pricing data into tsql database"
 readme = "README.md"
@@ -14,5 +14,4 @@ dependencies = [
     "typing-extensions>=4.12.2",
 ]
 
-[tool.uv.workspace]
-members = ["TWSOptionScraperv3", "TWSOptionScraperV3"]
+

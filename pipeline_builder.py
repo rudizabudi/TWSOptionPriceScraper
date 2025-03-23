@@ -57,7 +57,6 @@ class PipelineBuilder:
 
         current_time = datetime.now().time()
         last_scheduled_update = self.core.exp_update_timer - timedelta(days=1)
-        print(current_time < self.core.exp_update_timer.time(), self.core.exp_update_timer.time(), self.core.exp_last_update < last_scheduled_update, self.core.exp_last_update, last_scheduled_update)
         if current_time < self.core.exp_update_timer.time() and self.core.exp_last_update < last_scheduled_update:
             self.get_exp_options()
         # elif datetime.today().weekday() in [5, 6]:
@@ -313,7 +312,7 @@ class PipelineBuilder:
                                             save_contracts.append(contract)
 
                                         pickle.dump(save_contracts, file)
-                                        tprint(f'Expired {len(self.core.contract_pool['EXP'])} options saved to {self.core.exp_opt_file_name}.')
+                                        tprint(f'{len(self.core.contract_pool['EXP'])} expired options saved to {self.core.exp_opt_file_name}.')
 
                                         for contract in self.core.contract_pool['EXP']:
                                             contract.connect_core_space(self.core)
@@ -371,3 +370,8 @@ class PipelineBuilder:
                     self.option_exp_max_length = len(self.core.contract_pool['EXP'])
 
                     self.core.exp_update_timer += timedelta(days=1)
+                elif datetime.now() >= self.core.monday_roll_timer:
+                    tprint('Monday roll timer triggered.')
+                    self.core.contract_pool['EXP'] = []
+
+                    self.core.monday_roll_timer += timedelta(days=7)

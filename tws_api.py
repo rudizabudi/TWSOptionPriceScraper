@@ -1,10 +1,11 @@
-from ibapi.client import EClient
-from ibapi.wrapper import EWrapper
-from threading import Thread, Event, current_thread
-
+from datetime import datetime
 import time
 
-from core import tprint, ConnectionStatus
+from ibapi.client import EClient
+from ibapi.wrapper import EWrapper
+from threading import Thread
+
+from core import tprint
 
 
 class TWSCon(EWrapper, EClient):
@@ -14,24 +15,17 @@ class TWSCon(EWrapper, EClient):
         EClient.__init__(self, wrapper=self)
 
         self.core = core
-        self.core.no_contract = False
-
-        self.reconnecting: bool = False
 
         self.t: Thread | None = None
         core.write_tws_connection(self)
 
         self.build_connection()
 
-    def get_thread(self):
-        return self.t
-
     def connectAck(self):
         tprint(f'Connected to TWS API.')
 
     def connectionClosed(self):
-        if not self.isConnected() and not self.reconnecting:
-            tprint('Disconnected from TWS API.')
+        tprint('Disconnected from TWS API.')
 
     def error(self, reqId, errorCode, errorString):
         tprint(f'Error: {errorCode} --> {errorString}', debug=True)
@@ -68,6 +62,7 @@ class TWSCon(EWrapper, EClient):
         return info
 
     def historicalData(self, reqId, bar):
+        self.core.last_receive = datetime.now()
         if reqId not in self.core.reqId_hashmap.keys():
             raise KeyError('ReqId not assigned to an security class instance.')
 
@@ -88,23 +83,5 @@ class TWSCon(EWrapper, EClient):
             raise KeyError('ReqId not assigned to an security class instance.')
 
         self.core.reqId_hashmap[reqId](contractDetails.contract.conId)
-
-# @deprecated
-def connection_loop(core):
-    tws_thread: Thread | None = None
-    while True:
-        if core.connection_status == ConnectionStatus.DISCONNECTED:
-            tprint('Connection loop condition met. ' + str(tws_thread))
-            if tws_thread:
-                time.sleep(5)
-                tprint('Old thread to be joined.')
-                tws_thread.join()
-                tprint('Connection loop old thread joined.')
-
-            core.tws_con = TWSCon(core=core)
-            tws_thread = core.tws_con.get_thread()
-            tprint(f'Connection thread started.' + str(tws_thread))
-
-        time.sleep(10)
 
 
