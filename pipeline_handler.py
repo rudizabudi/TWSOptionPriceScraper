@@ -1,7 +1,7 @@
 from datetime import date, datetime, timedelta
 from math import floor, ceil
 from threading import Thread
-from time import sleep
+from time import sleep, perf_counter_ns
 
 from core import tprint, ConnectionStatus
 
@@ -121,6 +121,7 @@ class PipelineHandler:
         while True:
             try:
                 contract_instance = self.core.writable_pool[0]
+                
                 existing_dates = self.db.get_existing_dates(contract_container=contract_instance)
 
                 match contract_instance.get_secType():
@@ -158,9 +159,9 @@ class PipelineHandler:
 
                 if iq_header and iq_rows:
                     if contract_instance.get_secType() == 'OPT':
-                        tprint(f'Writing {len(iq_rows)} new price data points for {contract_instance.get_symbol()} {contract_instance.get_secType()} to database {contract_instance.get_table()} {contract_instance.get_right()} {contract_instance.get_strike()}.')
+                        tprint(f'Writing {len(iq_rows):>5} new price data points for {contract_instance.get_symbol()} {contract_instance.get_secType()} to database {contract_instance.get_table()} {contract_instance.get_right()} {contract_instance.get_strike()}.')
                     else:
-                        tprint(f'Writing {len(iq_rows)} new price data points for {contract_instance.get_symbol()} {contract_instance.get_secType()} to database {contract_instance.get_table()}.')
+                        tprint(f'Writing {len(iq_rows):>5} new price data points for {contract_instance.get_symbol()} {contract_instance.get_secType()} to database {contract_instance.get_table()}.')
 
                     for i in range(ceil(len(iq_rows) / self.core.insert_query_max_lines)):
                         insert_query = iq_header + ','.join(str(x) for x in iq_rows[i * self.core.insert_query_max_lines:min(len(iq_rows), (i + 1) * self.core.insert_query_max_lines)]) + ';'

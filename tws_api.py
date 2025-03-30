@@ -32,8 +32,8 @@ class TWSCon(EWrapper, EClient):
         if errorCode in [162, 200]:
             self.core.reqId_hashmap[reqId].__self__.set_error_flag(flag=True)
 
-        if errorCode == 504:
-            tprint(f'Error thread: {self.get_instance_info(self.t)}, {self.isConnected()}', debug=True)
+        # if errorCode == 504:
+        #     tprint(f'Error thread: {self.get_instance_info(self.t)}, {self.isConnected()}', debug=True)
 
     def build_connection(self):
         while True:
@@ -50,16 +50,6 @@ class TWSCon(EWrapper, EClient):
 
             except AttributeError as e:
                 tprint(f'Attribute error: {e}', debug=True)
-
-    def get_instance_info(self, t=None):
-        if not t:
-            t = self.t
-
-        info = {'thread_name': t.name,
-                'connection_value': self.core.connection_status.value,
-                'thread_id': t.ident,
-                'thread_alive': t.is_alive()}
-        return info
 
     def historicalData(self, reqId, bar):
         self.core.last_receive = datetime.now()
@@ -83,5 +73,4 @@ class TWSCon(EWrapper, EClient):
             raise KeyError('ReqId not assigned to an security class instance.')
 
         self.core.reqId_hashmap[reqId](contractDetails.contract.conId)
-
 

@@ -3,11 +3,14 @@ from ibapi.contract import Contract
 from database_broker import DatabaseBroker
 from typing import NoReturn
 
-from core import tprint
+from core import Core, tprint
+
 
 class ContractContainer:
     def __init__(self, core, **kwargs):
-        self.core = core
+
+        self.core: Core = core
+        self.db = DatabaseBroker(self.core, self)
 
         stk_cond: bool = all([x in kwargs.keys() for x in ['symbol', 'secType']])
         opt_cond: bool = all([x in kwargs.keys() for x in ['symbol', 'secType', 'strike', 'right', 'lastTradeDateOrContractMonth']])
@@ -20,16 +23,14 @@ class ContractContainer:
 
         self.child_container: list['ContractContainer'] = []
 
-        self.build_contract(**kwargs)
-
         self.strikes, self.expiries = [], []
 
         self.last_update = None
-
         self.error_flag = False
         self.historical_data_end = False
 
-        self.db = DatabaseBroker(self.core, self)
+        self.contract: Contract = Contract()
+        self.build_contract(**kwargs)
 
     def __str__(self) -> str | None:
         match self.contract.secType:
@@ -40,22 +41,6 @@ class ContractContainer:
                 return f'<Data Container Instance> {self.contract.symbol} {self.contract.strike}{self.contract.right} {dt_s} {self.contract.secType}'
         return None
 
-    def deconstruct(self):
-        match self.contract.secType:
-            case 'STK':
-                value = {'symbol': self.contract.symbol,
-                         'secType': self.contract.secType}
-            case 'OPT':
-                value = {'symbol': self.contract.symbol,
-                         'secType': self.contract.secType,
-                         'strike': self.contract.strike,
-                         'right': self.contract.right,
-                         'lastTradeDateOrContractMonth': self.contract.lastTradeDateOrContractMonth}
-            case _:
-                raise Exception('DataContainer: Invalid secType to deconstruct ContractContainer.')
-        #TODO: Alternative trigger "import Core" again within a method
-        return value
-
     def disconnect_core_space(self):
         self.core = None
 
@@ -63,7 +48,6 @@ class ContractContainer:
         self.core = core
 
     def build_contract(self, **kwargs):
-        self.contract: Contract = Contract()
         self.contract.symbol = kwargs['symbol']
         self.contract.secType = kwargs['secType']
         self.contract.exchange = 'SMART'
@@ -121,7 +105,7 @@ class ContractContainer:
         else:
             return self.expiries
 
-    def get_expiry(self, dt_object: bool = False, output_str_format: str = '%Y%m%d', ** kwargs) -> datetime | str | None:
+    def get_expiry(self, dt_object: bool = False, output_str_format: str = '%Y%m%d', ** kwargs) -> datetime | str:
         if self.contract.secType != 'OPT':
             raise Exception(f'Expiry date only available for contract instances of secType OPT. Requested {self.contract.symbol} of type {self.contract.secType}.')
 
@@ -131,7 +115,7 @@ class ContractContainer:
         else:
             return dt.strftime(output_str_format)
 
-    def get_strikes(self) -> list:
+    def get_strikes(self) -> list[None | int | float]:
         if self.contract.secType != 'STK':
             raise Exception(f'Expiry dates only available for contract instances of secType STK. Requested {self.contract.symbol} of type {self.contract.secType}.')
 

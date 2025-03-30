@@ -241,21 +241,21 @@ class DatabaseBroker():
         contract = contract_container.get_contract()
         database = contract_container.get_database()
         table = contract_container.get_table()
+
         match contract.secType:
             case 'STK':
-                #
                 query = f"""
                     SELECT DISTINCT date
                     FROM [{database}].[dbo].[{table}]
                     ORDER BY date DESC;
-                """
+                    """
             case 'OPT':
                 query = f"""
                     SELECT DISTINCT date
                     FROM [{database}].[dbo].[{table}]
                     WHERE strike = {contract.strike}
                     AND callput = '{contract.right}';
-                """
+                    """
             case _:
                 raise KeyError('Security type not supported. Valid secTypes: STK, OPT')
 
