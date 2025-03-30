@@ -1,59 +1,65 @@
 from collections import defaultdict
-from copy import deepcopy
 from datetime import datetime, time, timedelta
 from dotenv import set_key
 from itertools import batched
 import os
 import pickle
-import pyodbc
 import random
 from time import sleep
 from threading import Thread
 
 from contract_container import ContractContainer
-from core import tprint
+from core import Core, tprint
+from database_broker import DatabaseBroker
 from list_updater import list_updater
+from tws_api import TWSCon
+
 
 class PipelineBuilder:
-    def __init__(self, core =None, CC=None, DB=None):
+    def __init__(self, core: Core = None, CC: ContractContainer = None, DB: DatabaseBroker = None):
         if None in (core, CC, DB):
             raise Exception('<PipelineBuilder INIT> All parameters must be specified.')
 
-        self.core: core = core
+        self.core: Core = core
         self.ContractContainer: ContractContainer = CC
 
-        self.db: DB = DB(core=self.core, CC=self.ContractContainer)
+        self.db: DatabaseBroker = DB(core=self.core, CC=self.ContractContainer)
 
-        self.tws_con = core.tws_con
+        self.tws_con: TWSCon = core.tws_con
 
         self.t1: Thread = Thread(target=self.pipeline_sorter)
         self.t1.start()
 
-        self.debug_load: bool = False
-
-        self.option_exp_max_length:int = 0
-        self.stk_sorter_pointer: int = 0
+        self.option_exp_max_length:int = 0  # max length of current expired options batch
+        self.stk_sorter_pointer: int = 0  # queue pointer to the current index of self.core.contract_pool['STK']
 
         list_updater(self.core)
 
     def startup_build_sequence(self):
         """
-        Coordinates startup build of all self.core.contract_pool types (STK, OPT, EXP)
+        Orchestrates startup build of all self.core.contract_pool['STK' | 'EXP' | 'OPT'] types
+            1. Builds stock contracts
+            2. Builds option contracts
+            2.1 Conditionally (self.core.randomize_opts) randomizes option contracts
+            3. Conditionally  (self.core.exp_update_timer & self.core.exp_last_update) builds expired option contracts
 
-        If finished sets flag for main purpose threads to start.
+        If finished sets flag (self.core.startup) for main purpose threads to start.
+
+        :input:     core variable space and instance variables
+        :output:    :boolswitch self.core.startup flag
         """
-        if not self.debug_load:
-            self.build_stk_contracts()
 
-            tprint('Building option contracts...')
-            for stk in self.core.contract_pool['STK']:
-                self.core.contract_pool['OPT'].extend(self.build_opt_contracts(stk=stk))
+        self.build_stk_contracts()
 
-            if self.core.randomize_opts:
-                random.shuffle(self.core.contract_pool['OPT'])
-                tprint(f'Option contracts randomized.')
+        tprint('Building option contracts...')
+        for stk in self.core.contract_pool['STK']:
+            self.core.contract_pool['OPT'].extend(self.build_opt_contracts(stk=stk))
 
-            tprint('Building option contracts ended.')
+        if self.core.randomize_opts:
+            random.shuffle(self.core.contract_pool['OPT'])
+            tprint(f'Option contracts randomized.')
+
+        tprint('Building option contracts ended.')
 
         current_time = datetime.now().time()
         last_scheduled_update = self.core.exp_update_timer - timedelta(days=1)
@@ -63,27 +69,25 @@ class PipelineBuilder:
         #     'expired_option_contracts.pkl'
         else:
             tprint('Generating expired option list skipped because they are up2date.')
+
         self.option_exp_max_length = len(self.core.contract_pool['EXP'])
 
-        for list_type, name in {'STK': 'Stock', 'OPT': 'Option', 'EXP':'Expiry'}.items():
+        for list_type, name in {'STK': 'Stock', 'OPT': 'Option', 'EXP': 'Expiry'}.items():
             tprint(f'Start {name} queue length: {len(self.core.contract_pool[list_type])}')
 
         self.core.startup = False
 
     def build_stk_contracts(self):
         """
-            Builds stock ContractContainer objects by iterating over the symbols in the underlying list
-            and creating a contract container for each symbol.
+        Builds stock ContractContainer objects by iterating over the symbols list.
 
+        Prepares stock contract instances for building of derivative ContractContainer objects.
             Requests conId for each object.
-            Conditionally on the conId provided both available option expiries and strikes are saved in the object.
+            Conditionally on the conId provided both available option expiries and strikes are archived in the object.
 
-            All stock ContractContainer objects are put into self.core.contract_pool['STK']
-
-            :input: self.core.underlying_list
-            :output:  self.core.contract_pool['STK'] :appending
-
-            """
+        :input:     core variable space and instance variables
+        :output:    :appending to self.core.contract_pool['STK']
+        """
 
         tprint('Building stock contracts...', )
         for symbol in self.core.underlying_list['STK']:
@@ -97,11 +101,11 @@ class PipelineBuilder:
                 pass
 
             if stk.check_conId():
-                stk.set_reqId_assign(self.core.reqId_1, reqType='reqExpStr')
+                stk.set_reqId_assign(self.core.reqId_1, reqType = 'reqExpStr')
                 self.tws_con.reqSecDefOptParams(self.core.reqId_1, stk.get_symbol(), '', stk.get_secType(), stk.get_conId())
                 self.core.reqId_1 += 1
                 self.core.contract_pool['STK'].append(stk)
-                time_breaker = datetime.now() + timedelta(seconds=5)
+                time_breaker = datetime.now() + timedelta(seconds = 5)
                 while not stk.get_expiries() and not stk.get_strikes() and datetime.now() < time_breaker:
                     sleep(.1)
                     pass
@@ -110,17 +114,17 @@ class PipelineBuilder:
 
         tprint('Building stock contracts ended.')
 
-    def build_opt_contracts(self, stk: 'ContractContainer', expiry: str = None) -> list['ContractContainer']:
+    def build_opt_contracts(self, stk: ContractContainer, expiry: str = None) -> list[ContractContainer]:
         """
         Builds a list of ContractContainer objects representing options contracts from a stock ContractContainer object.
         If provided either uses specific expiry or alternatively loops through all in the stock ContractContainer object archived existing expiries.
 
-        Args:
-            stk (ContractContainer): The stock ContractContainer.
-            expiry (str, optional): The expiry date. Defaults to None.
+        :input:     core variable space and instance variables
+                    stk (ContractContainer): The security (stock) ContractContainer.
+                    expiry (str, optional): The expiry date. Defaults to None.
 
-        Returns:
-            list[ContractContainer]: The list of ContractContainer objects.
+        :output:    :return opt_contracts (list[ContractContainer]): The list of ContractContainer instances.
+
         """
         opt_contracts = []
 
@@ -146,13 +150,14 @@ class PipelineBuilder:
 
     def get_exp_options(self):
         """
-        Retrieves expired option contracts from the database.
+        Retrieves expired option contracts from the database and updates the contract pool.
 
-        This method fetches the table structure from the database, identifies the expired option contracts,
-        and updates the contract pool accordingly.
+        This method checks if expired option contracts can be loaded from a file. If not, it fetches the table structure from the database,
+        identifies the expired option contracts, and updates the contract pool accordingly.
 
-        :input: SQL database and table names
-        :output: Appending: self.core.contract_pool['EXP'] :appending | :deleting [optional] (['OPT[)
+        :input:     core variable space and instance variables
+        :output:    :appending to self.core.contract_pool['EXP']
+                    :removing [optional] from self.core.contract_pool['OPT']
         """
 
         exp_options_loaded = False
@@ -218,70 +223,59 @@ class PipelineBuilder:
 
             tprint('Getting expired option contracts ended.')
 
-            save_exp_options = True
-            options_saved = False
-            while save_exp_options and not options_saved:
-                try:
-                    if save_exp_options:
-
-                        save_contracts = []
-                        for contract in self.core.contract_pool['EXP']:
-                            contract.disconnect_core_space()
-                            save_contracts.append(contract)
-
-                        with open(self.core.exp_opt_file_name, 'wb') as file:
-                            pass
-
-                        with open(self.core.exp_opt_file_name, 'wb') as file:
-                            pickle.dump(save_contracts, file)
-
-                        for contract in self.core.contract_pool['EXP']:
-                            contract.connect_core_space(self.core)
-
-                        options_saved = True
-                        tprint(f'{len(self.core.contract_pool['EXP'])} expired options saved to {self.core.exp_opt_file_name}.')
-
-                except TypeError as e:
-                    tprint(f'Error saving expired options to {self.core.exp_opt_file_name}. Try again in 10 secs...')
-                    sleep(10)
-
-
-    def code_cemetery(self):
-        print('Loading contract data')
-        with open('option_contracts.pkl', 'rb') as file:
-            contracts = pickle.load(file)
-
-        print('Contract length:', len(contracts))
-        from time import perf_counter
-        start_time = perf_counter()
-
-        for i, contract in enumerate(contracts):
-            try:
-                if i % 100 == 0 and i != 0:
-                    perf = perf_counter() - start_time
-                    print(f'{perf} Secs. Count: {i}')
-            except pyodbc.ProgrammingError:
-                continue
+            self.dump_exp_options_to_file()
+            # save_exp_options = True
+            # options_saved = False
+            # while save_exp_options and not options_saved:
+                # try:
+                #     if save_exp_options:
+                #
+                #         save_contracts = []
+                #         for contract in self.core.contract_pool['EXP']:
+                #             contract.disconnect_core_space()
+                #             save_contracts.append(contract)
+                #
+                #         with open(self.core.exp_opt_file_name, 'wb') as file:
+                #             pass
+                #
+                #         with open(self.core.exp_opt_file_name, 'wb') as file:
+                #             pickle.dump(save_contracts, file)
+                #
+                #         for contract in self.core.contract_pool['EXP']:
+                #             contract.connect_core_space(self.core)
+                #
+                #         options_saved = True
+                #         tprint(f'{len(self.core.contract_pool['EXP'])} expired options saved to {self.core.exp_opt_file_name}.')
+                #
+                # except TypeError as e:
+                #     tprint(f'Error saving expired options to {self.core.exp_opt_file_name}. Try again in 10 secs...')
+                #     sleep(10)
 
     def pipeline_sorter(self):
         """
-        Continuously monitors the contract pools and immediate pool,
-        ensuring they are populated before proceeding.
+        Continuously sorts and updates the contract pools to ensure they are populated and ready for processing.
 
-        Contract pools hold all newly created contracts. EXP and OPT sub-pools are popped after processing, while STK is in an endless but delayed loop
-        STK and OPT contract pools double-check if SQL databases tables exist. Else they are created.
-        EXP and OPT contract pools check if all data up to expiry is already archived. Additionally OPT checks for necessity to request data, else it's rescheduled to the end of the pool.
+        This method runs indefinitely, checking the status of the contract pools and performing the following actions:
 
-        Very last there is a time-based scheduler to trigger EXP and STK contracts when appropriate. Eg. working days after trading hours
+        1. Waits until the startup process is complete and the contract pools are populated.
+        2. Continuously checks the length of the immediate pool and populates it with contracts from the EXP pool if necessary.
+        3. Updates the contract pools by removing expired contracts and adding new ones.
 
-        This function runs indefinitely until the program is stopped.
+        Checks and triggers time-controlled actions:
+            1. Stock updater
+            2. Expired options updater
+            3. Post weekend / Monday roll
 
-        :input self.core.contract_pool :popping | Reordering | Index-Loop
-        :output elf.core.immediate_pool : appending
-
+        :input:     core variable space and instance variables
+        :output:    :appending to self.core.immediate pool
+                    :removing from self.core.contract_pool['STK' | 'EXP' | 'OPT']
         """
+
         while True:
-            while (not self.core.contract_pool['STK'] and not self.core.contract_pool['OPT'] and not self.core.contract_pool['EXP']) or self.core.startup:
+
+            pools_empty = not self.core.contract_pool['STK'] and not self.core.contract_pool['OPT'] and not self.core.contract_pool['EXP']
+
+            while pools_empty or self.core.startup:
                 sleep(1)
                 pass
 
@@ -303,24 +297,25 @@ class PipelineBuilder:
                         tprint(f'Expired options progress: {pct_done:.2f}%. Contracts done: {contracts_done}')
 
                         if datetime.today().weekday() in [5, 6]:
-                            with open(self.core.exp_opt_file_name, 'wb') as file:
-                                while True:
-                                    try:
-                                        save_contracts = []
-                                        for contract in self.core.contract_pool['EXP']:
-                                            contract.disconnect_core_space()
-                                            save_contracts.append(contract)
-
-                                        pickle.dump(save_contracts, file)
-                                        tprint(f'{len(self.core.contract_pool['EXP'])} expired options saved to {self.core.exp_opt_file_name}.')
-
-                                        for contract in self.core.contract_pool['EXP']:
-                                            contract.connect_core_space(self.core)
-
-                                        break
-                                    except RuntimeError as e:
-                                        tprint(f'Failed to save expired options. Trying again in 10 seconds...')
-                                        sleep(10)
+                            self.dump_exp_options_to_file()
+                            # with open(self.core.exp_opt_file_name, 'wb') as file:
+                            #     while True:
+                            #         try:
+                            #             save_contracts = []
+                            #             for contract in self.core.contract_pool['EXP']:
+                            #                 contract.disconnect_core_space()
+                            #                 save_contracts.append(contract)
+                            #
+                            #             pickle.dump(save_contracts, file)
+                            #             tprint(f'{len(self.core.contract_pool['EXP'])} expired options saved to {self.core.exp_opt_file_name}.')
+                            #
+                            #             for contract in self.core.contract_pool['EXP']:
+                            #                 contract.connect_core_space(self.core)
+                            #
+                            #             break
+                            #         except RuntimeError as e:
+                            #             tprint(f'Failed to save expired options. Trying again in 10 seconds...')
+                            #             sleep(10)
 
                     if not self.core.contract_pool['EXP'] or len(self.core.contract_pool['EXP']) == 0:
                         self.core.exp_last_update = datetime.now().timestamp()
@@ -362,6 +357,7 @@ class PipelineBuilder:
                 if datetime.now() >= self.core.stk_update_timer:
                     tprint('Stk update timer triggered.')
                     #self.build_stk_contracts()
+
                     self.core.stk_update_timer += timedelta(days=1)
                     self.stk_sorter_pointer = 0
                 elif datetime.now() >= self.core.exp_update_timer:
@@ -375,3 +371,32 @@ class PipelineBuilder:
                     self.core.contract_pool['EXP'] = []
 
                     self.core.monday_roll_timer += timedelta(days=7)
+
+    def dump_exp_options_to_file(self):
+        """
+        Dumps expired option files into a Pickle file.
+        File save process is wrapped into disconnecting and reconnecting of core space for each contract.
+        Keeps looping until successfully finished.
+
+        :input:     core variable space and instance variables
+        :output:    :creating expired options Pickle dump file
+        """
+
+        with open(self.core.exp_opt_file_name, 'wb') as file:
+            while True:
+                try:
+                    save_contracts = []
+                    for contract in self.core.contract_pool['EXP']:
+                        contract.disconnect_core_space()
+                        save_contracts.append(contract)
+
+                    pickle.dump(save_contracts, file)
+                    tprint(f'{len(self.core.contract_pool['EXP'])} expired options saved to {self.core.exp_opt_file_name}.')
+
+                    for contract in self.core.contract_pool['EXP']:
+                        contract.connect_core_space(self.core)
+
+                    break
+                except RuntimeError as e:
+                    tprint(f'Failed to save expired options. Trying again in 10 seconds...')
+                    sleep(10)

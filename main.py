@@ -11,16 +11,16 @@ from tws_api import TWSCon
 
 if __name__ == '__main__':
     def main():
-        core = Core()
-        tws_con = TWSCon(core=core)
+        core: Core = Core()
+        tws_con: TWSCon = TWSCon(core=core)
 
         while not core.tws_con:
             sleep(.1)
 
-        pl_builder = PipelineBuilder(core=core, CC=ContractContainer, DB=DatabaseBroker)
+        pl_builder: PipelineBuilder = PipelineBuilder(core=core, CC=ContractContainer, DB=DatabaseBroker)
         pl_builder.startup_build_sequence()
 
-        pl_handler = PipelineHandler(core=core, CC=ContractContainer, DB=DatabaseBroker)
+        pl_handler: PipelineHandler = PipelineHandler(core=core, CC=ContractContainer, DB=DatabaseBroker)
 
         while True:
             if not tws_con.isConnected():
