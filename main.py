@@ -2,7 +2,7 @@ from datetime import datetime, timedelta
 from time import sleep
 
 from contract_container import ContractContainer
-from core import Core
+from core import Core, tprint
 from database_broker import DatabaseBroker
 from pipeline_builder import PipelineBuilder
 from pipeline_handler import PipelineHandler
@@ -22,16 +22,23 @@ if __name__ == '__main__':
 
         pl_handler: PipelineHandler = PipelineHandler(core=core, CC=ContractContainer, DB=DatabaseBroker)
 
+        while core.startup:
+            sleep(1)
+
+        sleep(60)
+
         while True:
             if not tws_con.isConnected():
-
-                core.write_tws_connection(tws_con)
-
                 tws_con = TWSCon(core=core)
+                #core.write_tws_connection(tws_con)
+                sleep(10)
+
+            #tprint(core.last_request, core.last_receive, core.core.last_request - core.last_receive)
+            try:
                 if core.last_request - core.last_receive > timedelta(seconds=core.glitch_detector_threshold):
                     raise Warning(f'TWS API might not send data any longer.')
-
-                sleep(10)
+            except TypeError:
+                pass
 
             sleep(10)
 
@@ -47,5 +54,6 @@ TODO: Add TWS Gateway restart in main.py loop if it's not responding/glitching
 TODO: Switch from threading to Python3.13 open GIL 
 TODO: Make constituents check and option_list_creation (-> new SQL tables) periodical
 TODO: Containerize anew
+TODO: Add manual sql_maintenance.py maintenance functions to controller loop
 """
 
