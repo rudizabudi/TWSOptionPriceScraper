@@ -1,5 +1,6 @@
 from datetime import datetime
 import time
+from typing import NoReturn
 
 from ibapi.client import EClient
 from ibapi.wrapper import EWrapper
@@ -27,7 +28,7 @@ class TWSCon(EWrapper, EClient):
     def connectionClosed(self):
         tprint('Disconnected from TWS API.')
 
-    def error(self, reqId, errorCode, errorString):
+    def error(self, reqId, errorCode, errorString) -> NoReturn:
         tprint(f'Error: {errorCode} --> {errorString}', debug=True)
         if errorCode in [162, 200]:
             self.core.reqId_hashmap[reqId].__self__.set_error_flag(flag=True)
@@ -35,7 +36,7 @@ class TWSCon(EWrapper, EClient):
         # if errorCode == 504:
         #     tprint(f'Error thread: {self.get_instance_info(self.t)}, {self.isConnected()}', debug=True)
 
-    def build_connection(self):
+    def build_connection(self) -> NoReturn:
         while True:
             try:
                 self.connect(self.core.host_ip, self.core.api_port, self.core.client_id)
@@ -51,24 +52,24 @@ class TWSCon(EWrapper, EClient):
             except AttributeError as e:
                 tprint(f'Attribute error: {e}', debug=True)
 
-    def historicalData(self, reqId, bar):
+    def historicalData(self, reqId, bar) -> NoReturn:
         self.core.last_receive = datetime.now()
         if reqId not in self.core.reqId_hashmap.keys():
-            raise KeyError('ReqId not assigned to an security class instance.')
+            raise KeyError('ReqId not assigned to an security instance.')
 
         self.core.reqId_hashmap[reqId]({bar.date: {'Open': bar.open, 'High': bar.high, 'Low': bar.low, 'Close': bar.close}})
 
-    def historicalDataEnd(self, reqId: int, start: str, end: str):
+    def historicalDataEnd(self, reqId: int, start: str, end: str) -> NoReturn:
         super().historicalDataEnd(reqId, start, end)
         self.core.reqId_hashmap[reqId].__self__.set_historical_data_end(flag=True)
 
-    def securityDefinitionOptionParameter(self, reqId, exchange, underlyingConId, tradingClass, multiplier, expirations, strikes):
+    def securityDefinitionOptionParameter(self, reqId, exchange, underlyingConId, tradingClass, multiplier, expirations, strikes) -> NoReturn:
         if reqId not in self.core.reqId_hashmap.keys():
             raise KeyError('ReqId not assigned to an security class instance.')
 
         self.core.reqId_hashmap[reqId](expiries=list(expirations) or [], strikes=list(strikes) or [])
 
-    def contractDetails(self, reqId: int, contractDetails):
+    def contractDetails(self, reqId: int, contractDetails) -> NoReturn:
         if reqId not in self.core.reqId_hashmap.keys():
             raise KeyError('ReqId not assigned to an security class instance.')
 
