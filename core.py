@@ -1,8 +1,9 @@
 from ast import literal_eval
 from enum import Enum
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from dotenv import load_dotenv
 import os
+import pytz
 
 load_dotenv('.env')
 
@@ -73,9 +74,21 @@ class Core:
         self.last_receive: datetime | None = None
         self.glitch_detector_threshold: int = 900  #in secs
 
+        self.local_tz: str = 'Europe/Berlin'
+        self.trade_tz: str = 'America/New_York'
+        self.normalized_time_diff: int = 6
+        self.utc_diffs: dict[tuple[int]: int] = {}
+
     def write_tws_connection(self, TWSCon):
         self.tws_con = TWSCon
 
+    def create_time_offset_table(self):
+        for day_dif in range(365):
+            date = datetime.now(timezone.utc) - timedelta(days=day_dif)
+
+            local_time = date.astimezone(pytz.timezone(self.local_tz))
+            trade_time = date.astimezone(pytz.timezone(self.trade_tz))
+            self.utc_diffs[date.year, date.month, date.day] = (trade_time.utcoffset() - local_time.utcoffset()).total_seconds() / 60 / 60
 
 def tprint(text: str = '', *args, debug: bool = False, **kwargs):
     if (debug and DEBUG_MODE) or not debug:

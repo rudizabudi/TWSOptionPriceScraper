@@ -2,10 +2,10 @@ from datetime import date, datetime, timedelta
 from math import floor, ceil
 from threading import Thread
 from time import sleep, perf_counter_ns
+import traceback
 
 from core import tprint, ConnectionStatus
 
-import traceback
 
 class PipelineHandler:
     def __init__(self, core=None, CC=None, DB=None):
@@ -43,7 +43,6 @@ class PipelineHandler:
         # print("Request_prices called from:")
         # for line in traceback.format_stack()[:-1]:
         #     print(line.strip())
-
         while not self.core.immediate_pool:
             sleep(10)
 
@@ -141,9 +140,9 @@ class PipelineHandler:
                 for i, (dt, ohlc) in enumerate(contract_instance.get_price_data().items(), start=1):
                     dt_dt = datetime.strptime(dt, '%Y%m%d %H:%M:%S')
                     if not existing_dates or dt_dt not in existing_dates:
-                        if date(2025, 3, 10) <= dt_dt.date() <= date(2025, 3, 23): #Time zone shift adjustment
-                            dt_dt += timedelta(hours=1)
-                            dt = dt_dt.strftime('%Y%m%d %H:%M:%S')
+                        time_offset = self.normalized_time_diff + self.utc_diffs[dt_dt.year, dt_dt.month, dt_dt.day]
+                        dt_dt += timedelta(hours=time_offset)
+                        dt = dt_dt.strftime('%Y%m%d %H:%M:%S')
 
                         match contract_instance.get_secType():
                             case 'STK':
