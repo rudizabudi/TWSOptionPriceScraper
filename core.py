@@ -19,7 +19,7 @@ class Core:
         self.exp_update_time: list[int] = literal_eval(os.getenv('EXP_UPDATE_TIME'))  # list[hour, minute]
 
         # Constituents list updater
-        self.grace_period: int = int(os.getenv('GRACE_PERIOD'))  # grace period after STK left index
+        self.grace_period: int = int(os.getenv('GRACE_PERIOD'))  # grace period in days after STK left index
         self.update_csv_path: str = os.getenv('UPDATE_CSV_PATH')
         self.extra_symbols: list[str] = os.getenv('EXTRA_SYMBOLS').split(',')
 
@@ -34,11 +34,18 @@ class Core:
         self.sql_password: str = os.getenv('SQL_PASSWORD')
         self.connection_string: str = f'DRIVER={{ODBC Driver 17 for SQL Server}};SERVER={self.sql_server};UID={self.sql_user};PWD={self.sql_password}'
 
-        # Pipeline time triggers
-        self.stk_last_update: datetime = datetime.fromtimestamp(float(os.getenv('STK_LAST_UPDATE')))
-        self.exp_last_update: datetime = datetime.fromtimestamp(float(os.getenv('EXP_LAST_UPDATE')))
+        # Further user defined settings
+        self.ip_length: int = 10  # length for immediate_pool length. Queue between pipeline_builder and pipeline_handler
+        self.timer_exclude_days: list[int] = [5, 6]  # skip trading day triggers on these weekdays (0-6)
+        self.insert_query_max_lines: int = 995  # max amount of inserts per query
+        self.glitch_detector_threshold: int = 900  # threshold in seconds after which tws_api glitching is assumed
+        self.expired_opt_days = 2  # threshold in days after that an option is considered expired (inclusive)
 
-        # Settings
+        self.local_tz: str = 'Europe/Berlin'  # name of local timezone
+        self.exchange_tz: str = 'America/New_York'  # name of exchange timezone
+        self.normalized_time_diff: int = 6  # usual time difference between local and exchange
+
+        # Initialization of shared variable space.
         self.reqId_hashmap: dict = {}
         self.reqId_1: int = 1
         self.reqId_2: int = 100_000_000
@@ -50,19 +57,17 @@ class Core:
                                                        'EXP': []}
 
         self.immediate_pool: list = []
-        self.ip_length: int = 10
 
         self.writable_pool: list = []
 
         self.timeout_breaker: dict[int, int] = {4: 20, 8: 40, 26: 120, 52: 180, 9999: 300}
 
-        self.insert_query_max_lines: int = 995
-
-        self.expired_opt_days = 2  # within this many days, an option is considered expired (inclusive)
+        # Pipeline time triggers
+        self.stk_last_update: datetime = datetime.fromtimestamp(float(os.getenv('STK_LAST_UPDATE')))
+        self.exp_last_update: datetime = datetime.fromtimestamp(float(os.getenv('EXP_LAST_UPDATE')))
 
         self.stk_update_timer: datetime = datetime.today().replace(hour=self.stk_update_time[0], minute=self.stk_update_time[1], second=0, microsecond=0)
         self.exp_update_timer: datetime = datetime.today().replace(hour=self.exp_update_time[0], minute=self.exp_update_time[1], second=0, microsecond=0)
-        self.timer_exclude_days: list[int] = [5, 6]
         self.monday_roll_timer: datetime = next(filter(lambda x: x.weekday() == 0, ((datetime.today() + timedelta(days=x + 1) for x in range(0, 7))))).replace(hour=6, minute=0)
 
         self.exp_opt_file_name = 'expired_option_contracts.pkl'
@@ -72,11 +77,7 @@ class Core:
 
         self.last_request: datetime | None = None
         self.last_receive: datetime | None = None
-        self.glitch_detector_threshold: int = 900  #in secs
 
-        self.local_tz: str = 'Europe/Berlin'
-        self.trade_tz: str = 'America/New_York'
-        self.normalized_time_diff: int = 6
         self.utc_diffs: dict[tuple[int]: int] = {}
 
     def write_tws_connection(self, TWSCon):
@@ -87,13 +88,16 @@ class Core:
             date = datetime.now(timezone.utc) - timedelta(days=day_dif)
 
             local_time = date.astimezone(pytz.timezone(self.local_tz))
-            trade_time = date.astimezone(pytz.timezone(self.trade_tz))
+            trade_time = date.astimezone(pytz.timezone(self.exchange_tz))
             self.utc_diffs[date.year, date.month, date.day] = (trade_time.utcoffset() - local_time.utcoffset()).total_seconds() / 60 / 60
 
 def tprint(text: str = '', *args, debug: bool = False, **kwargs):
     if (debug and DEBUG_MODE) or not debug:
         print(f'{datetime.now().strftime('%H:%M:%S')} : {text}')
 
+
+def restart_ibgateway():
+    os.system('pkill ibgateway')
 
 class ConnectionStatus(Enum):
     DISCONNECTED = 0
