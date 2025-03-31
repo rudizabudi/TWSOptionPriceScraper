@@ -21,7 +21,7 @@ class ContractContainer:
         self.price_data = {}
         self.conId = None
 
-        self.child_container: list['ContractContainer'] = []
+        self.child_container: list["ContractContainer"] = []
 
         self.strikes, self.expiries = [], []
 
@@ -41,12 +41,6 @@ class ContractContainer:
                 return f'<Data Container Instance> {self.contract.symbol} {self.contract.strike}{self.contract.right} {dt_s} {self.contract.secType}'
         return None
 
-    def disconnect_core_space(self) -> NoReturn:  # For serialization
-        self.core = None
-
-    def connect_core_space(self, core) -> NoReturn: # For serialization
-        self.core = core
-
     def build_contract(self, **kwargs) -> NoReturn:
         self.contract.symbol = kwargs['symbol']
         self.contract.secType = kwargs['secType']
@@ -57,6 +51,12 @@ class ContractContainer:
             self.contract.strike = kwargs['strike'] if 'strike' in kwargs.keys() else None
             self.contract.right = kwargs['right'] if 'right' in kwargs.keys() else None
             self.contract.lastTradeDateOrContractMonth = kwargs['lastTradeDateOrContractMonth'] if 'lastTradeDateOrContractMonth' in kwargs.keys() else None
+
+    def connect_core_space(self, core) -> NoReturn: # For serialization
+        self.core = core
+
+    def disconnect_core_space(self) -> NoReturn:  # For serialization
+        self.core = None
 
     # def get_last_price(self) -> float:
     #     return self.price_data[list(self.price_data.keys())[-1]][0]
@@ -87,15 +87,10 @@ class ContractContainer:
     def get_right(self) -> str:
         return self.contract.right
 
-    def get_strike(self) -> int | float:
-        if self.contract.secType == 'STK':
-            raise Exception(f'Strike only available for contract instances of secType OPT. Requested {self.contract.symbol} of type {self.contract.secType}.')
-        return self.contract.strike
-
     def get_symbol(self) -> str:
         return self.contract.symbol
 
-    def get_expiries(self, ** kwargs) -> list[None | int]:
+    def get_expiries(self, ** kwargs) -> list[None | int]:  # for STK type to build derivative contracts
         if self.contract.secType != 'STK':
             raise Exception(f'Expiry lists only available for contract instances of secType STK. Requested {self.contract.symbol} of type {self.contract.secType}.')
         elif not self.expiries:
@@ -103,7 +98,7 @@ class ContractContainer:
         else:
             return self.expiries
 
-    def get_expiry(self, dt_object: bool = False, output_str_format: str = '%Y%m%d', ** kwargs) -> datetime | str:
+    def get_expiry(self, dt_object: bool = False, output_str_format: str = '%Y%m%d', ** kwargs) -> datetime | str:  # for unique derivative contracts
         if self.contract.secType != 'OPT':
             raise Exception(f'Expiry date only available for contract instances of secType OPT. Requested {self.contract.symbol} of type {self.contract.secType}.')
 
@@ -113,7 +108,7 @@ class ContractContainer:
         else:
             return dt.strftime(output_str_format)
 
-    def get_strikes(self) -> list[None | int | float]:
+    def get_strikes(self) -> list[None | int | float]:  # for STK type to build derivative contracts
         if self.contract.secType != 'STK':
             raise Exception(f'Expiry dates only available for contract instances of secType STK. Requested {self.contract.symbol} of type {self.contract.secType}.')
 
@@ -121,6 +116,11 @@ class ContractContainer:
             return []
         else:
             return self.strikes
+
+    def get_strike(self) -> int | float:  # for unique derivative contracts
+        if self.contract.secType == 'STK':
+            raise Exception(f'Strike only available for contract instances of secType OPT. Requested {self.contract.symbol} of type {self.contract.secType}.')
+        return self.contract.strike
 
     def set_strexp(self,  expiries: list[str], strikes: list[int], ** kwargs) -> NoReturn:
         for x in expiries:
@@ -141,7 +141,7 @@ class ContractContainer:
 
         #tprint(f'Request ID {reqId} assigned to {reqType}: {self.core.reqId_hashmap}')
 
-    def register_derivative_child(self, child: 'ContractContainer', ** kwargs) -> NoReturn:
+    def register_derivative_child(self, child: "ContractContainer", ** kwargs) -> NoReturn:
         self.child_container.append(child)
 
     def get_last_update(self, response: bool = True, ** kwargs) -> datetime | NoReturn:

@@ -5,8 +5,8 @@ from itertools import batched
 import os
 import pickle
 import random
-from time import sleep
 from threading import Thread
+from time import sleep
 
 from contract_container import ContractContainer
 from core import Core, tprint
@@ -272,12 +272,8 @@ class PipelineBuilder:
         """
 
         while True:
-
-            pools_empty = not self.core.contract_pool['STK'] and not self.core.contract_pool['OPT'] and not self.core.contract_pool['EXP']
-
-            while pools_empty or self.core.startup:
+            while (not self.core.contract_pool['STK'] and not self.core.contract_pool['OPT'] and not self.core.contract_pool['EXP']) or self.core.startup:
                 sleep(1)
-                pass
 
             while len(self.core.immediate_pool) < self.core.ip_length:
                 tprint(f'Primal pool lengths: {len(self.core.contract_pool["STK"]), self.stk_sorter_pointer, len(self.core.contract_pool["OPT"]), len(self.core.contract_pool["EXP"]), len(self.core.immediate_pool)}', debug=True)

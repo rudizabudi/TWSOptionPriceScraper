@@ -10,6 +10,7 @@ dependencies = [
     "psutil>=7.0.0",
     "pyodbc>=5.2.0",
     "python-dotenv>=1.0.1",
+    "pytz>=2025.2",
     "requests>=2.32.3",
     "typing-extensions>=4.12.2",
 ]

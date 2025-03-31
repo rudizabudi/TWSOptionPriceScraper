@@ -4,7 +4,7 @@ from threading import Thread
 from time import sleep, perf_counter_ns
 import traceback
 
-from core import tprint, ConnectionStatus
+from core import tprint
 
 
 class PipelineHandler:

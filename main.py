@@ -1,4 +1,5 @@
 from datetime import datetime, timedelta
+import psutil
 from time import sleep
 
 from contract_container import ContractContainer
@@ -46,7 +47,6 @@ if __name__ == '__main__':
 
 """
 TODO: Make SQL query f-strings injection proof
-TODO: Adapt local time conditions to UTC. Make TZ aware
 TODO: Fix odd stocks like BRK.B or ABNB.
 TODO: Improve logical load vs rebuild logic
 TODO: Long-term: Switch from MSQL to InfluxDB/postgresql
@@ -55,5 +55,8 @@ TODO: Switch from threading to Python3.13 open GIL
 TODO: Make constituents check and option_list_creation (-> new SQL tables) periodical
 TODO: Containerize anew
 TODO: Add manual sql_maintenance.py maintenance functions to controller loop
+
+DONE:
+TODO: Adapt local time conditions to UTC. Make TZ aware
 """
 
