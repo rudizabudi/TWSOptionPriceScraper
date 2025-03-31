@@ -41,13 +41,13 @@ class ContractContainer:
                 return f'<Data Container Instance> {self.contract.symbol} {self.contract.strike}{self.contract.right} {dt_s} {self.contract.secType}'
         return None
 
-    def disconnect_core_space(self):
+    def disconnect_core_space(self) -> NoReturn:  # For serialization
         self.core = None
 
-    def connect_core_space(self, core):
+    def connect_core_space(self, core) -> NoReturn: # For serialization
         self.core = core
 
-    def build_contract(self, **kwargs):
+    def build_contract(self, **kwargs) -> NoReturn:
         self.contract.symbol = kwargs['symbol']
         self.contract.secType = kwargs['secType']
         self.contract.exchange = 'SMART'
@@ -64,9 +64,8 @@ class ContractContainer:
     def get_price_data(self) -> dict[datetime, list]:
         return self.price_data
 
-    def set_price_data(self, prices: dict[datetime, list]):
+    def set_price_data(self, prices: dict[datetime, list]) -> NoReturn:
         self.price_data[list(prices.keys())[0]] = list(prices.values())[0]
-        #print('Received: ', self.price_data)
 
     def check_conId(self) -> bool:
         if self.contract.secType == 'STK' and self.conId is None:
@@ -76,7 +75,7 @@ class ContractContainer:
     def get_conId(self) -> int:
         return self.conId
 
-    def set_conId(self, conId: int):
+    def set_conId(self, conId: int) -> NoReturn:
         self.conId = conId
 
     def get_contract(self) -> Contract:
@@ -96,11 +95,10 @@ class ContractContainer:
     def get_symbol(self) -> str:
         return self.contract.symbol
 
-    def get_expiries(self, ** kwargs) -> list[int | None]:
+    def get_expiries(self, ** kwargs) -> list[None | int]:
         if self.contract.secType != 'STK':
             raise Exception(f'Expiry lists only available for contract instances of secType STK. Requested {self.contract.symbol} of type {self.contract.secType}.')
         elif not self.expiries:
-            #tprint(f'No expiry data available for {self.contract.symbol}.')
             return []
         else:
             return self.expiries
@@ -124,28 +122,13 @@ class ContractContainer:
         else:
             return self.strikes
 
-    def set_strexp(self,  expiries: list[str], strikes: list[int], ** kwargs):
+    def set_strexp(self,  expiries: list[str], strikes: list[int], ** kwargs) -> NoReturn:
         for x in expiries:
             if x not in self.expiries: self.expiries.append(x)
         for x in strikes:
             if x not in self.strikes: self.strikes.append(x)
 
-    def set_reqId_assign(self, reqId: int, reqType: str, ** kwargs):
-        """
-        Assigns a request ID to a specific request type.
-
-        Args:
-            reqId (int): The request ID to be assigned.
-            reqType (str): The method to be executed once data is received
-                Supported methods:  ReqHistData -> self.set_price_data
-                                    ReqConDetails -> self.set_conId
-                                    ReqExpStr -> self.set_strexp
-        Raises:
-            AttributeError: If the reqType is not one of the valid options.
-
-        Returns:
-            None
-        """
+    def set_reqId_assign(self, reqId: int, reqType: str, ** kwargs) -> NoReturn:
         match reqType:
             case 'reqHistData':
                 self.core.reqId_hashmap[reqId] = self.set_price_data
@@ -158,7 +141,7 @@ class ContractContainer:
 
         #tprint(f'Request ID {reqId} assigned to {reqType}: {self.core.reqId_hashmap}')
 
-    def register_derivative_child(self, child: 'ContractContainer', ** kwargs):
+    def register_derivative_child(self, child: 'ContractContainer', ** kwargs) -> NoReturn:
         self.child_container.append(child)
 
     def get_last_update(self, response: bool = True, ** kwargs) -> datetime | NoReturn:
@@ -166,6 +149,7 @@ class ContractContainer:
             self.last_update = self.db.get_last_update(contract_container=self)
         if response:
             return self.last_update
+        return None
 
     def get_database(self, ** kwargs) -> str:
         match self.contract.secType:
@@ -188,14 +172,14 @@ class ContractContainer:
     def get_error_flag(self, **kwargs) -> bool:
         return self.error_flag
 
-    def set_error_flag(self, flag: bool = False, **kwargs):
+    def set_error_flag(self, flag: bool = False, **kwargs) -> NoReturn:
         #print(f'Error flag set for {self.contract.symbol}.')
         self.error_flag = flag
 
     def get_last_price(self, **kwargs) -> float:
         return self.db.get_last_price(stk_symbol=self.get_symbol())
 
-    def set_historical_data_end(self, flag: bool = False, **kwargs):
+    def set_historical_data_end(self, flag: bool = False, **kwargs) -> NoReturn:
         self.historical_data_end = flag
 
     def get_historical_data_end(self, **kwargs) -> bool:
