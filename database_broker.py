@@ -1,13 +1,15 @@
 from datetime import datetime
 from ibapi.contract import Contract
 import pyodbc
+from typing import Callable
 
 #from contract_container import ContractContainer
 from core import tprint
 
 type ContractContainer = 'ContractContainer'
 
-class DatabaseBroker():
+
+class DatabaseBroker:
     """
     Container to hold all related data of a IBAPI contract instance.
     Written for T-SQL.
@@ -24,22 +26,22 @@ class DatabaseBroker():
         self.ContractContainer = CC
         pass
 
-    def sql_query(func) -> object:
-        def con_wrapper(self, *args, **kwargs):
+    def sql_query(func) -> Callable:
+        def con_wrapper(self, *args, **kwargs) -> dict | None:
             sql_con: pyodbc.Connection = pyodbc.connect(self.connection_string)
-            #tprint(f'Con opened for {func.__name__}')
             cursor: pyodbc.Cursor = sql_con.cursor()
+
+            #tprint(f'Con opened for {func.__name__}')
             # tprint('Args', args)
             # tprint('Kwargs', kwargs)
 
-            result = func(self, cursor = cursor, con = sql_con, *args, **kwargs) or {}
+            result = func(self, cursor=cursor, con=sql_con, *args, **kwargs) or {}
 
             if isinstance(result, dict) and 'commit' in result.keys():
                 sql_con.commit()
 
             cursor.close()
             sql_con.close()
-            #tprint('Con closed')
 
             return result['data'] if isinstance(result, dict) and 'commit' in result.keys() else None
 
@@ -234,6 +236,7 @@ class DatabaseBroker():
         if query_string:
             cursor.execute(query_string)
             return {'data': None, 'commit': True}
+        raise Exception('No query string provided.')
 
     @sql_query
     def get_existing_dates(self, cursor, contract_container: ContractContainer = None, **kwargs) -> dict[str: set[datetime], str: bool]:

@@ -66,16 +66,16 @@ class PipelineHandler:
                 query_time = datetime.today().strftime("%Y%m%d-%H:%M:%S")
 
                 self.core.last_request = datetime.now()
-                self.tws_con.reqHistoricalData( reqId=self.core.reqId_2,
-                                                contract=contract_instance.get_contract(),
-                                                endDateTime=query_time,
-                                                durationStr=duration_str,
-                                                barSizeSetting=self.core.candle_length,
-                                                whatToShow="Bid_Ask",
-                                                useRTH=1,
-                                                formatDate=1,
-                                                keepUpToDate=False,
-                                                chartOptions=[])
+                self.tws_con.reqHistoricalData(reqId=self.core.reqId_2,
+                                               contract=contract_instance.get_contract(),
+                                               endDateTime=query_time,
+                                               durationStr=duration_str,
+                                               barSizeSetting=self.core.CANDLE_LENGTH,
+                                               whatToShow="Bid_Ask",
+                                               useRTH=1,
+                                               formatDate=1,
+                                               keepUpToDate=False,
+                                               chartOptions=[])
 
                 self.core.reqId_2 += 1
                 timeout_secs = 60
@@ -140,7 +140,7 @@ class PipelineHandler:
                 for i, (dt, ohlc) in enumerate(contract_instance.get_price_data().items(), start=1):
                     dt_dt = datetime.strptime(dt, '%Y%m%d %H:%M:%S')
                     if not existing_dates or dt_dt not in existing_dates:
-                        time_offset = self.normalized_time_diff + self.utc_diffs[dt_dt.year, dt_dt.month, dt_dt.day]
+                        time_offset = self.core.NORMALIZED_TIME_DIFF + self.core.utc_diffs[dt_dt.year, dt_dt.month, dt_dt.day]
                         dt_dt += timedelta(hours=time_offset)
                         dt = dt_dt.strftime('%Y%m%d %H:%M:%S')
 
@@ -162,8 +162,8 @@ class PipelineHandler:
                     else:
                         tprint(f'Writing {len(iq_rows):>5} new price data points for {contract_instance.get_symbol()} {contract_instance.get_secType()} to database {contract_instance.get_table()}.')
 
-                    for i in range(ceil(len(iq_rows) / self.core.insert_query_max_lines)):
-                        insert_query = iq_header + ','.join(str(x) for x in iq_rows[i * self.core.insert_query_max_lines:min(len(iq_rows), (i + 1) * self.core.insert_query_max_lines)]) + ';'
+                    for i in range(ceil(len(iq_rows) / self.core.INSERT_QUERY_MAX_LINES)):
+                        insert_query = iq_header + ','.join(str(x) for x in iq_rows[i * self.core.INSERT_QUERY_MAX_LINES:min(len(iq_rows), (i + 1) * self.core.INSERT_QUERY_MAX_LINES)]) + ';'
                         self.db.write_price_data(query_string=insert_query)
                 else:
                     if contract_instance.get_secType() == 'OPT':

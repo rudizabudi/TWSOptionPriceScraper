@@ -16,11 +16,11 @@ sql_password: str = os.getenv('SQL_PASSWORD')
 
 
 def list_updater(core):
-    connection_string = f'DRIVER={{ODBC Driver 17 for SQL Server}};SERVER={core.sql_server};UID={core.sql_user};PWD={core.sql_password}'
+    connection_string = f'DRIVER={{ODBC Driver 17 for SQL Server}};SERVER={core.SQL_SERVER};UID={core.SQL_USER};PWD={core.SQL_PASSWORD}'
     sql_conn: pyodbc.Connection = pyodbc.connect(connection_string)
     cursor = sql_conn.cursor()
 
-    resp = requests.get(core.update_csv_path)
+    resp = requests.get(core.UPDATE_CSV_PATH)
     current_symbols = []
     for row in resp.text.split('\n')[1:-1]:
         current_symbols.append(row.split(',')[0])
@@ -61,7 +61,7 @@ def list_updater(core):
             new_counter += 1
         cursor.execute(query)
 
-    for symbol in core.extra_symbols:
+    for symbol in core.EXTRA_SYMBOLS:
         if symbol not in old_entries:
             query = f"""
                     INSERT INTO [{db}].[dbo].[{tb}] ({columns})
@@ -82,7 +82,7 @@ def list_updater(core):
     for symbol, last_seen, always_update in response:
         if always_update:
             query_list.append(symbol)
-        elif datetime.today() <= last_seen + timedelta(days=core.grace_period):
+        elif datetime.today() <= last_seen + timedelta(days=core.GRACE_PERIOD):
             query_list.append(symbol)
 
     core.underlying_list['STK'].extend(query_list)
