@@ -1,4 +1,5 @@
 from datetime import datetime
+from enum import Enum, auto
 import time
 from typing import NoReturn
 
@@ -18,15 +19,21 @@ class TWSCon(EWrapper, EClient):
         self.core = core
 
         self.t: Thread | None = None
-        core.write_tws_connection(self)
+        core.write_tws_connection(self)#
+
+        self.connection_status: Enum = ConnectionStatus.DISCONNECTED
 
         self.build_connection()
 
     def connectAck(self):
-        tprint(f'Connected to TWS API.')
+        if self.connection_status.name == 'DISCONNECTED':
+            self.connection_status = ConnectionStatus.CONNECTED
+            tprint(f'Connected to TWS API.')
 
     def connectionClosed(self):
-        tprint('Disconnected from TWS API.')
+        if self.connection_status.name == 'CONNECTED':
+            self.connection_status = ConnectionStatus.DISCONNECTED
+            tprint(f'Disconnected from TWS API.')
 
     def error(self, reqId, errorCode, errorString) -> NoReturn:
         tprint(f'Error: {errorCode} --> {errorString}', debug=True)
@@ -39,7 +46,7 @@ class TWSCon(EWrapper, EClient):
     def build_connection(self) -> NoReturn:
         while True:
             try:
-                self.connect(self.core.host_ip, self.core.api_port, self.core.client_id)
+                self.connect(self.core.HOST_IP, self.core.API_PORT, self.core.CLIENT_ID)
                 time.sleep(2)
                 self.t: Thread = Thread(target=self.run)
                 self.t.start()
@@ -74,4 +81,9 @@ class TWSCon(EWrapper, EClient):
             raise KeyError('ReqId not assigned to an security class instance.')
 
         self.core.reqId_hashmap[reqId](contractDetails.contract.conId)
+
+
+class ConnectionStatus(Enum):
+    DISCONNECTED = auto()
+    CONNECTED = auto()
 
