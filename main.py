@@ -1,9 +1,8 @@
-from datetime import datetime, timedelta
-import psutil
+from datetime import timedelta
 from time import sleep
 
 from contract_container import ContractContainer
-from core import Core, tprint
+from core import Core, tprint, kill_ibgateway, start_ibgateway
 from database_broker import DatabaseBroker
 from pipeline_builder import PipelineBuilder
 from pipeline_handler import PipelineHandler
@@ -34,10 +33,14 @@ if __name__ == '__main__':
                 #core.write_tws_connection(tws_con)
                 sleep(10)
 
-            #tprint(core.last_request, core.last_receive, core.core.last_request - core.last_receive)
             try:
-                if core.last_request - core.last_receive > timedelta(seconds=core.glitch_detector_threshold):
-                    raise Warning(f'TWS API might not send data any longer.')
+                if core.last_request - core.last_receive > timedelta(seconds=core.GLITCH_DETECTOR_THRESHOLD):
+                    tprint(f'TWS API might not send data any longer.')
+                    if core.USE_IBC:
+                        kill_ibgateway()
+                        sleep(30)
+                        start_ibgateway()
+                        sleep(30)
             except TypeError:
                 pass
 
@@ -50,13 +53,13 @@ TODO: Make SQL query f-strings injection proof
 TODO: Fix odd stocks like BRK.B or ABNB.
 TODO: Improve logical load vs rebuild logic
 TODO: Long-term: Switch from MSQL to InfluxDB/postgresql
-TODO: Add TWS Gateway restart in main.py loop if it's not responding/glitching
 TODO: Switch from threading to Python3.13 open GIL 
 TODO: Make constituents check and option_list_creation (-> new SQL tables) periodical
 TODO: Containerize anew
 TODO: Add manual sql_maintenance.py maintenance functions to controller loop
 
-DONE:
-TODO: Adapt local time conditions to UTC. Make TZ aware
+:
+DONE: Adapt local time conditions to UTC. Make TZ aware
+DONE: Add TWS Gateway restart in main.py loop if it's not responding/glitching
 """
 

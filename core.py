@@ -1,9 +1,10 @@
 from ast import literal_eval
-from enum import Enum
 from datetime import datetime, timedelta, timezone
 from dotenv import load_dotenv
 import os
+import psutil
 import pytz
+from typing import Callable
 
 load_dotenv('.env')
 
@@ -13,40 +14,46 @@ DEBUG_MODE: bool = False
 class Core:
     def __init__(self):
         #  General Settings:
-        self.candle_length: str = os.getenv('CANDLE_LENGTH')
-        self.randomize_opts = literal_eval(os.getenv('RANDOMIZE_OPTS'))
-        self.stk_update_time: list[int] = literal_eval(os.getenv('STK_UPDATE_TIME'))  # list[hour, minute]
-        self.exp_update_time: list[int] = literal_eval(os.getenv('EXP_UPDATE_TIME'))  # list[hour, minute]
+        self.CANDLE_LENGTH: str = os.getenv('CANDLE_LENGTH')
+        self.RANDOMIZE_OPTS: bool = literal_eval(os.getenv('RANDOMIZE_OPTS'))
+        self.STK_UPDATE_TIME: list[int] = literal_eval(os.getenv('STK_UPDATE_TIME'))  # list[hour, minute]
+        self.EXP_UPDATE_TIME: list[int] = literal_eval(os.getenv('EXP_UPDATE_TIME'))  # list[hour, minute]
 
         # Constituents list updater
-        self.grace_period: int = int(os.getenv('GRACE_PERIOD'))  # grace period in days after STK left index
-        self.update_csv_path: str = os.getenv('UPDATE_CSV_PATH')
-        self.extra_symbols: list[str] = os.getenv('EXTRA_SYMBOLS').split(',')
+        self.GRACE_PERIOD: int = int(os.getenv('GRACE_PERIOD'))  # grace period in days after STK left index
+        self.UPDATE_CSV_PATH: str = os.getenv('UPDATE_CSV_PATH')
+        self.EXTRA_SYMBOLS: list[str] = os.getenv('EXTRA_SYMBOLS').split(',')
 
         # TWS API credentials
-        self.host_ip: str = os.getenv('HOST_IP')
-        self.api_port: int = int(os.getenv('API_PORT'))
-        self.client_id: int = int(os.getenv('CLIENT_ID'))
+        self.HOST_IP: str = os.getenv('HOST_IP')
+        self.API_PORT: int = int(os.getenv('API_PORT'))
+        self.CLIENT_ID: int = int(os.getenv('CLIENT_ID'))
 
         # Microsoft SQL Server credentials
-        self.sql_server: str = os.getenv('SQL_SERVER')
-        self.sql_user: str = os.getenv('SQL_USER')
-        self.sql_password: str = os.getenv('SQL_PASSWORD')
-        self.connection_string: str = f'DRIVER={{ODBC Driver 17 for SQL Server}};SERVER={self.sql_server};UID={self.sql_user};PWD={self.sql_password}'
+        self.SQL_SERVER: str = os.getenv('SQL_SERVER')
+        self.SQL_USER: str = os.getenv('SQL_USER')
+        self.SQL_PASSWORD: str = os.getenv('SQL_PASSWORD')
+        self.connection_string: str = f'DRIVER={{ODBC Driver 17 for SQL Server}};SERVER={self.SQL_SERVER};UID={self.SQL_USER};PWD={self.SQL_PASSWORD}'
+
+        # IBC settings for TWS API restart
+        self.USE_IBC: bool = bool(os.getenv('USE_IBC'))
+        self.STARTGW_IBC_PATH: str = os.getenv('START_GW_PATH')
 
         # Further user defined settings
-        self.ip_length: int = 10  # length for immediate_pool length. Queue between pipeline_builder and pipeline_handler
-        self.timer_exclude_days: list[int] = [5, 6]  # skip trading day triggers on these weekdays (0-6)
-        self.insert_query_max_lines: int = 995  # max amount of inserts per query
-        self.glitch_detector_threshold: int = 900  # threshold in seconds after which tws_api glitching is assumed
-        self.expired_opt_days = 2  # threshold in days after that an option is considered expired (inclusive)
+        self.IP_LENGTH: int = 10  # length for immediate_pool length. Queue between pipeline_builder and pipeline_handler
+        self.TIMER_EXCLUDE_DAYS: list[int] = [5, 6]  # skip trading day triggers on these weekdays (0-6)
+        self.INSERT_QUERY_MAX_LINES: int = 995  # max amount of inserts per query
+        self.GLITCH_DETECTOR_THRESHOLD: int = 900  # threshold in seconds after which tws_api glitching is assumed
+        self.EXPIRED_OPT_DAYS = 2  # threshold in days after that an option is considered expired (inclusive)
 
-        self.local_tz: str = 'Europe/Berlin'  # name of local timezone
-        self.exchange_tz: str = 'America/New_York'  # name of exchange timezone
-        self.normalized_time_diff: int = 6  # usual time difference between local and exchange
+        self.LOCAL_TZ: str = 'Europe/Berlin'  # name of local timezone
+        self.EXCHANGE_TZ: str = 'America/New_York'  # name of exchange timezone
+        self.NORMALIZED_TIME_DIFF: int = 6  # usual time difference between local and exchange
+
+        self.EXP_OPT_FILE_NAME: str = 'expired_option_contracts.pkl'
 
         # Initialization of shared variable space.
-        self.reqId_hashmap: dict = {}
+        self.reqId_hashmap: dict[int: Callable] = {}
         self.reqId_1: int = 1
         self.reqId_2: int = 100_000_000
 
@@ -56,9 +63,9 @@ class Core:
                                                        'OPT': [],
                                                        'EXP': []}
 
-        self.immediate_pool: list = []
+        self.immediate_pool: list["ContractContainer"] = []
 
-        self.writable_pool: list = []
+        self.writable_pool: list["ContractContainer"] = []
 
         self.timeout_breaker: dict[int, int] = {4: 20, 8: 40, 26: 120, 52: 180, 9999: 300}
 
@@ -66,19 +73,18 @@ class Core:
         self.stk_last_update: datetime = datetime.fromtimestamp(float(os.getenv('STK_LAST_UPDATE')))
         self.exp_last_update: datetime = datetime.fromtimestamp(float(os.getenv('EXP_LAST_UPDATE')))
 
-        self.stk_update_timer: datetime = datetime.today().replace(hour=self.stk_update_time[0], minute=self.stk_update_time[1], second=0, microsecond=0)
-        self.exp_update_timer: datetime = datetime.today().replace(hour=self.exp_update_time[0], minute=self.exp_update_time[1], second=0, microsecond=0)
+        self.stk_update_timer: datetime = datetime.today().replace(hour=self.STK_UPDATE_TIME[0], minute=self.STK_UPDATE_TIME[1], second=0, microsecond=0)
+        self.exp_update_timer: datetime = datetime.today().replace(hour=self.EXP_UPDATE_TIME[0], minute=self.EXP_UPDATE_TIME[1], second=0, microsecond=0)
         self.monday_roll_timer: datetime = next(filter(lambda x: x.weekday() == 0, ((datetime.today() + timedelta(days=x + 1) for x in range(0, 7))))).replace(hour=6, minute=0)
 
-        self.exp_opt_file_name = 'expired_option_contracts.pkl'
+        self.startup: bool = True
+        self.tws_con: "TWSCon" = None
 
-        self.startup = True
-        self.tws_con = None
-
-        self.last_request: datetime | None = None
-        self.last_receive: datetime | None = None
+        self.last_request: datetime = None
+        self.last_receive: datetime = None
 
         self.utc_diffs: dict[tuple[int]: int] = {}
+        self.create_time_offset_table()
 
     def write_tws_connection(self, TWSCon):
         self.tws_con = TWSCon
@@ -87,19 +93,35 @@ class Core:
         for day_dif in range(365):
             date = datetime.now(timezone.utc) - timedelta(days=day_dif)
 
-            local_time = date.astimezone(pytz.timezone(self.local_tz))
-            trade_time = date.astimezone(pytz.timezone(self.exchange_tz))
+            local_time = date.astimezone(pytz.timezone(self.LOCAL_TZ))
+            trade_time = date.astimezone(pytz.timezone(self.EXCHANGE_TZ))
             self.utc_diffs[date.year, date.month, date.day] = (trade_time.utcoffset() - local_time.utcoffset()).total_seconds() / 60 / 60
+
 
 def tprint(text: str = '', *args, debug: bool = False, **kwargs):
     if (debug and DEBUG_MODE) or not debug:
         print(f'{datetime.now().strftime('%H:%M:%S')} : {text}')
 
 
-def restart_ibgateway():
-    os.system('pkill ibgateway')
+def kill_ibgateway():
 
-class ConnectionStatus(Enum):
-    DISCONNECTED = 0
-    CONNECTED = 1
-    RECONNECTING = 2
+    pids = {psutil.Process(x).name(): x for x in psutil.pids()}
+
+    if pid := pids.get('ibgateway.exe'):
+        psutil.Process(pid).kill()
+    else:
+        raise Exception('IBGateway process not found.')
+
+    tprint(f'IBGateway closed.')
+
+
+def start_ibgateway(core):
+    if os.path.exists(core.STARTGW_IBC_PATH):
+        os.system(core.STARTGW_IBC_PATH)
+    else:
+        tprint(f'IBC not found. Provided path: {core.STARTGW_IBC_PATH}')
+
+    tprint(f'IBGateway started.')
+
+
+
