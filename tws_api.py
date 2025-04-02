@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timedelta
 from enum import Enum, auto
 import time
 from typing import NoReturn
@@ -7,7 +7,7 @@ from ibapi.client import EClient
 from ibapi.wrapper import EWrapper
 from threading import Thread
 
-from core import tprint
+from core import tprint, start_ibgateway
 
 
 class TWSCon(EWrapper, EClient):
@@ -32,8 +32,14 @@ class TWSCon(EWrapper, EClient):
 
     def connectionClosed(self):
         if self.connection_status.name == 'CONNECTED':
+            self.core.time_disconnect = datetime.now()
             self.connection_status = ConnectionStatus.DISCONNECTED
             tprint(f'Disconnected from TWS API.')
+
+        if self.connection_status.name == 'DISCONNECTED':
+            if self.core.time_disconnect + timedelta(seconds=self.core.RESTART_THRESHOLD) <= datetime.now():
+                start_ibgateway(self.core)
+                time.sleep(30)
 
     def error(self, reqId, errorCode, errorString) -> NoReturn:
         tprint(f'Error: {errorCode} --> {errorString}', debug=True)
