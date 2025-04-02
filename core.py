@@ -1,6 +1,8 @@
 from ast import literal_eval
+from collections import defaultdict
 from datetime import datetime, timedelta, timezone
 from dotenv import load_dotenv
+import json
 import os
 import psutil
 import pytz
@@ -33,7 +35,7 @@ class Core:
         self.SQL_SERVER: str = os.getenv('SQL_SERVER')
         self.SQL_USER: str = os.getenv('SQL_USER')
         self.SQL_PASSWORD: str = os.getenv('SQL_PASSWORD')
-        self.connection_string: str = f'DRIVER={{ODBC Driver 17 for SQL Server}};SERVER={self.SQL_SERVER};UID={self.SQL_USER};PWD={self.SQL_PASSWORD}'
+        self.SQL_CONNECTION_STRING: str = f'DRIVER={{ODBC Driver 17 for SQL Server}};SERVER={self.SQL_SERVER};UID={self.SQL_USER};PWD={self.SQL_PASSWORD}'
 
         # IBC settings for TWS API restart
         self.USE_IBC: bool = bool(os.getenv('USE_IBC'))
@@ -50,7 +52,10 @@ class Core:
         self.EXCHANGE_TZ: str = 'America/New_York'  # name of exchange timezone
         self.NORMALIZED_TIME_DIFF: int = 6  # usual time difference between local and exchange
 
+        self.RESTART_THRESHOLD: int = 300  # if automatic API restart fails try again in secs
+
         self.EXP_OPT_FILE_NAME: str = 'expired_option_contracts.pkl'
+        self.JSON_SESSION_FILE_NAME: str = 'session_data.json'
 
         # Initialization of shared variable space.
         self.reqId_hashmap: dict[int: Callable] = {}
@@ -70,8 +75,8 @@ class Core:
         self.timeout_breaker: dict[int, int] = {4: 20, 8: 40, 26: 120, 52: 180, 9999: 300}
 
         # Pipeline time triggers
-        self.stk_last_update: datetime = datetime.fromtimestamp(float(os.getenv('STK_LAST_UPDATE')))
-        self.exp_last_update: datetime = datetime.fromtimestamp(float(os.getenv('EXP_LAST_UPDATE')))
+        self.stk_last_update: datetime = datetime.fromtimestamp(read_data_json(self).get('STK_LAST_UPDATE', 0))
+        self.exp_last_update: datetime = datetime.fromtimestamp(read_data_json(self).get('EXP_LAST_UPDATE', 0))
 
         self.stk_update_timer: datetime = datetime.today().replace(hour=self.STK_UPDATE_TIME[0], minute=self.STK_UPDATE_TIME[1], second=0, microsecond=0)
         self.exp_update_timer: datetime = datetime.today().replace(hour=self.EXP_UPDATE_TIME[0], minute=self.EXP_UPDATE_TIME[1], second=0, microsecond=0)
@@ -82,6 +87,8 @@ class Core:
 
         self.last_request: datetime = None
         self.last_receive: datetime = None
+
+        self.time_disconnect: datetime = None
 
         self.utc_diffs: dict[tuple[int]: int] = {}
         self.create_time_offset_table()
@@ -104,24 +111,44 @@ def tprint(text: str = '', *args, debug: bool = False, **kwargs):
 
 
 def kill_ibgateway():
-
     pids = {psutil.Process(x).name(): x for x in psutil.pids()}
 
     if pid := pids.get('ibgateway.exe'):
         psutil.Process(pid).kill()
+        tprint(f'IBGateway closed.')
     else:
-        raise Exception('IBGateway process not found.')
-
-    tprint(f'IBGateway closed.')
+        tprint('IBGateway process not found.')
 
 
 def start_ibgateway(core):
     if os.path.exists(core.STARTGW_IBC_PATH):
         os.system(core.STARTGW_IBC_PATH)
     else:
-        tprint(f'IBC not found. Provided path: {core.STARTGW_IBC_PATH}')
+        raise Exception(f'IBC not found. Provided path: {core.STARTGW_IBC_PATH}')
 
     tprint(f'IBGateway started.')
+
+
+def read_data_json(core) -> dict[str: str | float] | defaultdict:
+    if os.path.exists(os.path.join(os.path.dirname(__file__), core.JSON_SESSION_FILE_NAME)):
+        with open(core.JSON_SESSION_FILE_NAME, 'r', encoding='utf-8') as f:
+            loaded_data = json.load(f)
+        return loaded_data
+
+    return defaultdict(dict)
+
+
+def write_data_json(core, data: dict = None):
+    if not isinstance(data, dict):
+        raise TypeError('Json data must be a dictionary.')
+
+    loaded_data = read_data_json(core)
+    for k, v in data.items():
+        loaded_data[k] = v
+
+    with open(core.JSON_SESSION_FILE_NAME, 'w', encoding='utf-8') as f:
+        json.dump(loaded_data, f, indent=4)
+
 
 
 

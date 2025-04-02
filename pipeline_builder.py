@@ -1,6 +1,5 @@
 from collections import defaultdict
 from datetime import datetime, time, timedelta
-from dotenv import set_key
 from itertools import batched
 import os
 import pickle
@@ -9,9 +8,9 @@ from threading import Thread
 from time import sleep
 
 from contract_container import ContractContainer
-from core import Core, tprint
+from core import Core, tprint, read_data_json, write_data_json
 from database_broker import DatabaseBroker
-from list_updater import list_updater
+from constituents_handler import constituents_list_updater, load_constituents
 from tws_api import TWSCon
 
 
@@ -33,7 +32,8 @@ class PipelineBuilder:
         self.option_exp_max_length:int = 0  # max length of current expired options batch
         self.stk_sorter_pointer: int = 0  # queue pointer to the current index of self.core.contract_pool['STK']
 
-        list_updater(self.core)
+        constituents_list_updater(self.core)
+        load_constituents(self.core)
 
     def startup_build_sequence(self):
         """
@@ -73,7 +73,7 @@ class PipelineBuilder:
         self.option_exp_max_length = len(self.core.contract_pool['EXP'])
 
         for list_type, name in {'STK': 'Stock', 'OPT': 'Option', 'EXP': 'Expiry'}.items():
-            tprint(f'Start {name} queue length: {len(self.core.contract_pool[list_type])}')
+            tprint(f'Start {name} queue length: {len(self.core.contract_pool[list_type]):,}')
 
         self.core.startup = False
 
@@ -105,7 +105,7 @@ class PipelineBuilder:
                 self.tws_con.reqSecDefOptParams(self.core.reqId_1, stk.get_symbol(), '', stk.get_secType(), stk.get_conId())
                 self.core.reqId_1 += 1
                 self.core.contract_pool['STK'].append(stk)
-                time_breaker = datetime.now() + timedelta(seconds = 5)
+                time_breaker = datetime.now() + timedelta(seconds=5)
                 while not stk.get_expiries() and not stk.get_strikes() and datetime.now() < time_breaker:
                     sleep(.1)
                     pass
@@ -290,7 +290,7 @@ class PipelineBuilder:
                     if len(self.core.contract_pool['EXP']) % 1000 == 0:
                         pct_done = ((self.option_exp_max_length - len(self.core.contract_pool['EXP'])) / self.option_exp_max_length) * 100
                         contracts_done = self.option_exp_max_length - len(self.core.contract_pool['EXP'])
-                        tprint(f'Expired options progress: {pct_done:.2f}%. Contracts done: {contracts_done}')
+                        tprint(f'Expired options progress: {pct_done:.2f}%. Contracts done: {contracts_done:,}')
 
                         if datetime.today().weekday() in [5, 6]:
                             self.dump_exp_options_to_file()
@@ -315,7 +315,7 @@ class PipelineBuilder:
 
                     if not self.core.contract_pool['EXP'] or len(self.core.contract_pool['EXP']) == 0:
                         self.core.exp_last_update = datetime.now().timestamp()
-                        set_key(dotenv_path='.env', key_to_set='EXP_LAST_UPDATE', value_to_set=str(self.core.exp_last_update))
+                        write_data_json(self.core, data= {'EXP_LAST_UPDATE': self.core.exp_last_update})
 
                 elif len(self.core.contract_pool['STK'][self.stk_sorter_pointer:]) > 0:
                     self.db.check_table_exists(contract_container=self.core.contract_pool['STK'][self.stk_sorter_pointer], create_missing=True)
@@ -325,7 +325,8 @@ class PipelineBuilder:
 
                     if self.stk_sorter_pointer >= len(self.core.contract_pool['STK']):
                         self.core.stk_last_update = datetime.now().timestamp()
-                        set_key(dotenv_path='.env', key_to_set='STK_LAST_UPDATE', value_to_set=str(self.core.stk_last_update))
+
+                        write_data_json(self.core, data= {'STK_LAST_UPDATE': self.core.stk_last_update})
 
                 elif self.core.contract_pool['OPT'] and len(self.core.contract_pool['OPT']) > 0:
                     self.db.check_table_exists(contract_container=self.core.contract_pool['OPT'][0], create_missing=True)
@@ -387,7 +388,7 @@ class PipelineBuilder:
                         save_contracts.append(contract)
 
                     pickle.dump(save_contracts, file)
-                    tprint(f'{len(self.core.contract_pool['EXP'])} expired options saved to {self.core.EXP_OPT_FILE_NAME}.')
+                    tprint(f'{len(self.core.contract_pool['EXP']):,} expired options saved to {self.core.EXP_OPT_FILE_NAME}.')
 
                     for contract in self.core.contract_pool['EXP']:
                         contract.connect_core_space(self.core)
