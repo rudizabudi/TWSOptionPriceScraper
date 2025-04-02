@@ -39,7 +39,7 @@ if __name__ == '__main__':
                     if core.USE_IBC:
                         kill_ibgateway()
                         sleep(30)
-                        start_ibgateway()
+                        start_ibgateway(core)
                         sleep(30)
             except TypeError:
                 pass

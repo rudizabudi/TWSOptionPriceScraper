@@ -3,10 +3,7 @@ from ibapi.contract import Contract
 import pyodbc
 from typing import Callable
 
-#from contract_container import ContractContainer
 from core import tprint
-
-type ContractContainer = 'ContractContainer'
 
 
 class DatabaseBroker:
@@ -17,7 +14,7 @@ class DatabaseBroker:
     def __init__(self, core=None, CC=None):
         if None in (core, CC):
             raise Exception('<DatabaseBroker INIT> All parameters must be specified.')
-        self.connection_string = core.connection_string
+        self.connection_string = core.SQL_CONNECTION_STRING
 
         self.table_structure = {}
 
@@ -31,9 +28,9 @@ class DatabaseBroker:
             sql_con: pyodbc.Connection = pyodbc.connect(self.connection_string)
             cursor: pyodbc.Cursor = sql_con.cursor()
 
-            #tprint(f'Con opened for {func.__name__}')
-            # tprint('Args', args)
-            # tprint('Kwargs', kwargs)
+            # tprint(f'Con opened for {func.__name__}', Debug=True)
+            # tprint(f'{args=}', Debug=True)
+            # tprint(f'{kwargs=}', Debug=True)
 
             result = func(self, cursor=cursor, con=sql_con, *args, **kwargs) or {}
 
@@ -86,7 +83,7 @@ class DatabaseBroker:
             return {'data': None, 'commit': False}
 
     @sql_query
-    def check_table_exists(self, cursor: pyodbc.Cursor, contract_container: ContractContainer, create_missing: bool = True, **kwargs) -> dict[str: None, str: bool]:
+    def check_table_exists(self, cursor: pyodbc.Cursor, contract_container: 'ContractContainer', create_missing: bool = True, **kwargs) -> dict[str: None, str: bool]:
         """
          Check if a database and a table exists for a given contract.
 
@@ -127,7 +124,7 @@ class DatabaseBroker:
         return {'data': None, 'commit': False}
 
     @sql_query
-    def get_last_update(self, cursor: pyodbc.Cursor, contract_container: ContractContainer, **kwargs) -> dict[str: datetime, str: bool]:
+    def get_last_update(self, cursor: pyodbc.Cursor, contract_container: 'ContractContainer', **kwargs) -> dict[str: datetime, str: bool]:
         """
         Fetches the latest update from the database for a given contract.
 
@@ -239,7 +236,7 @@ class DatabaseBroker:
         raise Exception('No query string provided.')
 
     @sql_query
-    def get_existing_dates(self, cursor, contract_container: ContractContainer = None, **kwargs) -> dict[str: set[datetime], str: bool]:
+    def get_existing_dates(self, cursor, contract_container: 'ContractContainer' = None, **kwargs) -> dict[str: set[datetime], str: bool]:
 
         contract = contract_container.get_contract()
         database = contract_container.get_database()
