@@ -15,6 +15,9 @@ DEBUG_MODE: bool = False
 
 class Core:
     def __init__(self):
+        if not os.path.exists(os.path.join(os.path.dirname(__file__), '.env')):
+            raise Exception('.env file not found. Please fill and rename .env_rename')
+
         #  General Settings:
         self.CANDLE_LENGTH: str = os.getenv('CANDLE_LENGTH')
         self.RANDOMIZE_OPTS: bool = literal_eval(os.getenv('RANDOMIZE_OPTS'))
@@ -40,6 +43,8 @@ class Core:
         # IBC settings for TWS API restart
         self.USE_IBC: bool = bool(os.getenv('USE_IBC'))
         self.STARTGW_IBC_PATH: str = os.getenv('START_GW_PATH')
+
+        self.validate_env_input()
 
         # Further user defined settings
         self.IP_LENGTH: int = 10  # length for immediate_pool length. Queue between pipeline_builder and pipeline_handler
@@ -93,11 +98,41 @@ class Core:
         self.utc_diffs: dict[tuple[int]: int] = {}
         self.create_time_offset_table()
 
+    def validate_env_input(self):
+        if self.CANDLE_LENGTH not in ('1 secs', '5 secs', '10 secs', '15 secs', '30 secs', '1 min', '2 mins', '3 mins', '5 mins', '10 mins', '15 mins', '20 mins', '30 mins', '1 hour', '2 hours', '3 hours', '4 hours', '8 hours', '1 day', '1W', '1M'):
+            raise ValueError(f'Illegal candle length: {self.CANDLE_LENGTH}')
+        if not isinstance(self.RANDOMIZE_OPTS, bool):
+            raise ValueError(f'Illegal value for RANDOMIZE_OPTS: {self.RANDOMIZE_OPTS}')
+        if not all(map(lambda x: isinstance(x, int), self.STK_UPDATE_TIME)) or not len(self.STK_UPDATE_TIME) == 2:
+            raise ValueError(f'Illegal value for STK_UPDATE_TIME: {self.STK_UPDATE_TIME}')
+        if not all(map(lambda x: isinstance(x, int), self.EXP_UPDATE_TIME)) or not len(self.EXP_UPDATE_TIME) == 2:
+            raise ValueError(f'Illegal value for EXP_UPDATE_TIME: {self.EXP_UPDATE_TIME}')
+
+        if not len(self.HOST_IP.split('.')) == 4 and all(map(lambda x: isinstance(x, int), self.HOST_IP.split('.'))):
+            raise ValueError(f'Illegal value for HOST_IP: {self.HOST_IP}')
+        if not isinstance(self.API_PORT, int):
+            raise ValueError(f'Illegal value for API_PORT: {self.API_PORT}')
+        if not isinstance(self.CLIENT_ID, int):
+            raise ValueError(f'Illegal value for CLIENT_ID: {self.CLIENT_ID}')
+
+        if not self.SQL_SERVER or not self.SQL_USER or not self.SQL_PASSWORD:
+            raise ValueError(f'Illegal value for SQL_SERVER, SQL_USER, SQL_PASSWORD: {self.SQL_SERVER}, {self.SQL_USER}, {self.SQL_PASSWORD}')
+
+        if not isinstance(self.GRACE_PERIOD, int):
+            raise ValueError(f'Illegal value for GRACE_PERIOD: {self.GRACE_PERIOD}')
+        if not isinstance(self.UPDATE_CSV_PATH, str):
+            raise ValueError(f'Illegal value for UPDATE_CSV_PATH: {self.UPDATE_CSV_PATH}')
+
+        if not isinstance(self.USE_IBC, bool):
+            raise ValueError(f'Illegal value for USE_IBC: {self.USE_IBC}')
+        if not isinstance(self.STARTGW_IBC_PATH, str):
+            raise ValueError(f'Illegal value for START_GW_PATH: {self.STARTGW_IBC_PATH}')
+
     def write_tws_connection(self, TWSCon):
         self.tws_con = TWSCon
 
     def create_time_offset_table(self):
-        for day_dif in range(365):
+        for day_dif in range(-30, 365):
             date = datetime.now(timezone.utc) - timedelta(days=day_dif)
 
             local_time = date.astimezone(pytz.timezone(self.LOCAL_TZ))
