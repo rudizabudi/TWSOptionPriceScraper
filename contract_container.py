@@ -7,6 +7,12 @@ from core import Core, tprint
 
 
 class ContractContainer:
+    """
+    Holds a contract and its data.
+    Is used both for Stocks and Derivatives.
+
+    """
+
     def __init__(self, core, **kwargs):
 
         self.core: Core = core
@@ -52,7 +58,7 @@ class ContractContainer:
             self.contract.right = kwargs['right'] if 'right' in kwargs.keys() else None
             self.contract.lastTradeDateOrContractMonth = kwargs['lastTradeDateOrContractMonth'] if 'lastTradeDateOrContractMonth' in kwargs.keys() else None
 
-    def connect_core_space(self, core) -> NoReturn: # For serialization
+    def connect_core_space(self, core) -> NoReturn:  # For serialization
         self.core = core
 
     def disconnect_core_space(self) -> NoReturn:  # For serialization

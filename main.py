@@ -61,5 +61,7 @@ TODO: Add manual sql_maintenance.py maintenance functions to controller loop
 :
 DONE: Adapt local time conditions to UTC. Make TZ aware
 DONE: Add TWS Gateway restart in main.py loop if it's not responding/glitching
+DONE: Rebuild constituents loader.
+DONE: .env input validation
 """
 

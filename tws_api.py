@@ -31,7 +31,7 @@ class TWSCon(EWrapper, EClient):
             tprint(f'Connected to TWS API.')
 
     def connectionClosed(self):
-        if self.connection_status.name == 'CONNECTED':
+        if self.connection_status.name == 'CONNECTED' or not self.core.time_disconnect:
             self.core.time_disconnect = datetime.now()
             self.connection_status = ConnectionStatus.DISCONNECTED
             tprint(f'Disconnected from TWS API.')

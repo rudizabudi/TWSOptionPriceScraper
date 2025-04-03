@@ -8,7 +8,7 @@ from threading import Thread
 from time import sleep
 
 from contract_container import ContractContainer
-from core import Core, tprint, read_data_json, write_data_json
+from core import Core, tprint, write_data_json
 from database_broker import DatabaseBroker
 from constituents_handler import constituents_list_updater, load_constituents
 from tws_api import TWSCon
@@ -101,7 +101,7 @@ class PipelineBuilder:
                 pass
 
             if stk.check_conId():
-                stk.set_reqId_assign(self.core.reqId_1, reqType = 'reqExpStr')
+                stk.set_reqId_assign(self.core.reqId_1, reqType='reqExpStr')
                 self.tws_con.reqSecDefOptParams(self.core.reqId_1, stk.get_symbol(), '', stk.get_secType(), stk.get_conId())
                 self.core.reqId_1 += 1
                 self.core.contract_pool['STK'].append(stk)
@@ -394,6 +394,6 @@ class PipelineBuilder:
                         contract.connect_core_space(self.core)
 
                     break
-                except RuntimeError as e:
+                except RuntimeError:
                     tprint(f'Failed to save expired options. Trying again in 10 seconds...')
                     sleep(10)
