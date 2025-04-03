@@ -45,7 +45,8 @@ class Core:
     TIMER_EXCLUDE_DAYS: list[int] = [5, 6]  # skip trading day triggers on these weekdays (0-6)
     INSERT_QUERY_MAX_LINES: int = 995  # max amount of inserts per query
     GLITCH_DETECTOR_THRESHOLD: int = 900  # threshold in seconds after which tws_api glitching is assumed
-    EXPIRED_OPT_DAYS = 2  # threshold in days after that an option is considered expired (inclusive)
+    EXPIRED_OPT_DAYS: int = 2  # threshold in days after that an option is considered expired (inclusive)
+    OPT_LIST_CURRENT: int = 7  # days after which creation the option list is considered current
 
     LOCAL_TZ: str = 'Europe/Berlin'  # name of local timezone
     EXCHANGE_TZ: str = 'America/New_York'  # name of exchange timezone
@@ -53,6 +54,7 @@ class Core:
 
     RESTART_THRESHOLD: int = 300  # if automatic API restart fails try again in secs
 
+    MAIN_OPT_FILE_NAME: str = 'main_option_contracts.pkl'
     EXP_OPT_FILE_NAME: str = 'expired_option_contracts.pkl'
     JSON_SESSION_FILE_NAME: str = 'session_data.json'
 
@@ -96,38 +98,39 @@ class Core:
         self.create_time_offset_table()
 
         # Pipeline time triggers
-        self.stk_last_update: datetime = datetime.fromtimestamp(read_data_json(self).get('STK_LAST_UPDATE', 0))
-        self.exp_last_update: datetime = datetime.fromtimestamp(read_data_json(self).get('EXP_LAST_UPDATE', 0))
+        self.stk_last_update: float | datetime = datetime.fromtimestamp(read_data_json(self).get('STK_LAST_UPDATE', 0))
+        self.exp_last_update: float | datetime = datetime.fromtimestamp(read_data_json(self).get('EXP_LAST_UPDATE', 0))
+        self.last_opt_build: float | datetime = datetime.fromtimestamp(read_data_json(self).get('LAST_OPT_BUILD', 0))
 
     def validate_env_input(self):
         if self.CANDLE_LENGTH not in ('1 secs', '5 secs', '10 secs', '15 secs', '30 secs', '1 min', '2 mins', '3 mins', '5 mins', '10 mins', '15 mins', '20 mins', '30 mins', '1 hour', '2 hours', '3 hours', '4 hours', '8 hours', '1 day', '1W', '1M'):
             raise ValueError(f'Illegal candle length: {self.CANDLE_LENGTH}')
         if not isinstance(self.RANDOMIZE_OPTS, bool):
-            raise ValueError(f'Illegal value for RANDOMIZE_OPTS: {self.RANDOMIZE_OPTS}')
+            raise ValueError(f'Invalid value for RANDOMIZE_OPTS: {self.RANDOMIZE_OPTS}')
         if not all(map(lambda x: isinstance(x, int), self.STK_UPDATE_TIME)) or not len(self.STK_UPDATE_TIME) == 2:
-            raise ValueError(f'Illegal value for STK_UPDATE_TIME: {self.STK_UPDATE_TIME}')
+            raise ValueError(f'Invalid value for STK_UPDATE_TIME: {self.STK_UPDATE_TIME}')
         if not all(map(lambda x: isinstance(x, int), self.EXP_UPDATE_TIME)) or not len(self.EXP_UPDATE_TIME) == 2:
-            raise ValueError(f'Illegal value for EXP_UPDATE_TIME: {self.EXP_UPDATE_TIME}')
+            raise ValueError(f'Invalid value for EXP_UPDATE_TIME: {self.EXP_UPDATE_TIME}')
 
         if not len(self.HOST_IP.split('.')) == 4 and all(map(lambda x: isinstance(x, int), self.HOST_IP.split('.'))):
-            raise ValueError(f'Illegal value for HOST_IP: {self.HOST_IP}')
+            raise ValueError(f'Invalid value for HOST_IP: {self.HOST_IP}')
         if not isinstance(self.API_PORT, int):
-            raise ValueError(f'Illegal value for API_PORT: {self.API_PORT}')
+            raise ValueError(f'Invalid value for API_PORT: {self.API_PORT}')
         if not isinstance(self.CLIENT_ID, int):
-            raise ValueError(f'Illegal value for CLIENT_ID: {self.CLIENT_ID}')
+            raise ValueError(f'Invalid value for CLIENT_ID: {self.CLIENT_ID}')
 
         if not self.SQL_SERVER or not self.SQL_USER or not self.SQL_PASSWORD:
-            raise ValueError(f'Illegal value for SQL_SERVER, SQL_USER, SQL_PASSWORD: {self.SQL_SERVER}, {self.SQL_USER}, {self.SQL_PASSWORD}')
+            raise ValueError(f'Invalid value for SQL_SERVER, SQL_USER, SQL_PASSWORD: {self.SQL_SERVER}, {self.SQL_USER}, {self.SQL_PASSWORD}')
 
         if not isinstance(self.GRACE_PERIOD, int):
-            raise ValueError(f'Illegal value for GRACE_PERIOD: {self.GRACE_PERIOD}')
+            raise ValueError(f'Invalid value for GRACE_PERIOD: {self.GRACE_PERIOD}')
         if not isinstance(self.UPDATE_CSV_PATH, str):
-            raise ValueError(f'Illegal value for UPDATE_CSV_PATH: {self.UPDATE_CSV_PATH}')
+            raise ValueError(f'Invalid value for UPDATE_CSV_PATH: {self.UPDATE_CSV_PATH}')
 
         if not isinstance(self.USE_IBC, bool):
-            raise ValueError(f'Illegal value for USE_IBC: {self.USE_IBC}')
+            raise ValueError(f'Invalid value for USE_IBC: {self.USE_IBC}')
         if not isinstance(self.STARTGW_IBC_PATH, str):
-            raise ValueError(f'Illegal value for START_GW_PATH: {self.STARTGW_IBC_PATH}')
+            raise ValueError(f'Invalid value for START_GW_PATH: {self.STARTGW_IBC_PATH}')
 
     def create_time_offset_table(self):
         for day_dif in range(-30, 365):
