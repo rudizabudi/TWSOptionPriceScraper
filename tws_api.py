@@ -19,7 +19,7 @@ class TWSCon(EWrapper, EClient):
         self.core = core
 
         self.t: Thread | None = None
-        core.write_tws_connection(self)#
+        core.tws_con = self
 
         self.connection_status: Enum = ConnectionStatus.DISCONNECTED
 
