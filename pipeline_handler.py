@@ -10,12 +10,13 @@ from database_broker import DatabaseBroker
 
 
 class PipelineHandler:
+
     def __init__(self):
 
         self.core: Core = EnvDistributor.get_core()
+        self.db: DatabaseBroker = DatabaseBroker()
 
-        self.ContractContainer = ContractContainer
-        self.db = DatabaseBroker
+        self.ContractContainer: ContractContainer = ContractContainer
 
         self.t1 = Thread(target=self.request_prices).start()
         self.t2 = Thread(target=self.write_to_database).start()
@@ -111,8 +112,6 @@ class PipelineHandler:
 
         while not self.core.writable_pool:
             sleep(10)
-
-        self.db = self.db()
 
         while True:
             try:

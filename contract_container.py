@@ -16,7 +16,7 @@ class ContractContainer:
     def __init__(self, **kwargs):
 
         self.core: Core = EnvDistributor.get_core()
-        self.db = DatabaseBroker
+        self.db: DatabaseBroker = DatabaseBroker()
 
         stk_cond: bool = all([x in kwargs.keys() for x in ['symbol', 'secType']])
         opt_cond: bool = all([x in kwargs.keys() for x in ['symbol', 'secType', 'strike', 'right', 'lastTradeDateOrContractMonth']])
