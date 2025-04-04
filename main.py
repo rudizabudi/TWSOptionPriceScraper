@@ -1,7 +1,6 @@
 from datetime import timedelta
 from time import sleep
 
-from contract_container import ContractContainer
 from core import Core, tprint, kill_ibgateway, start_ibgateway
 from database_broker import DatabaseBroker
 from pipeline_builder import PipelineBuilder
@@ -17,10 +16,9 @@ if __name__ == '__main__':
         while not core.tws_con:
             sleep(.1)
 
-        pl_builder: PipelineBuilder = PipelineBuilder(core=core, CC=ContractContainer, DB=DatabaseBroker)
-        pl_builder.startup_build_sequence()
+        PipelineBuilder().startup_build_sequence()
 
-        pl_handler: PipelineHandler = PipelineHandler(core=core, CC=ContractContainer, DB=DatabaseBroker)
+        PipelineHandler()
 
         while core.startup:
             sleep(1)

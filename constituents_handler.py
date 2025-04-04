@@ -39,9 +39,6 @@ def constituents_list_updater(core):
         cursor.execute(query)
         sql_conn.commit()
 
-    else:
-        tprint(f'Table {ListUpdaterSettings.constituents_table} already exists.')
-
     query = f'SELECT symbol FROM [{ListUpdaterSettings.constituents_db}].[dbo].[{ListUpdaterSettings.constituents_table}]'
     cursor.execute(query)
     old_entries = set(x[0] for x in cursor.fetchall())
@@ -76,6 +73,8 @@ def constituents_list_updater(core):
 
     if new_counter:
         tprint('{new_counter} new underlyings added to S&P constituents list.')
+    else:
+        tprint('Constituents list is up to date.')
 
     cursor.close()
     sql_conn.close()
@@ -98,6 +97,8 @@ def load_constituents(core):
             temp_underlying_list.append(symbol)
 
     core.underlying_list['STK'].extend(temp_underlying_list)
+
+    tprint('Constituents loaded.')
 
     cursor.close()
     sql_conn.close()
