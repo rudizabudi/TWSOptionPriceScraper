@@ -1,21 +1,21 @@
-from datetime import date, datetime, timedelta
+from datetime import datetime, timedelta
 from math import floor, ceil
 from threading import Thread
-from time import sleep, perf_counter_ns
+from time import sleep
 import traceback
 
-from core import tprint
+from contract_container import ContractContainer
+from core import Core, EnvDistributor, tprint
+from database_broker import DatabaseBroker
 
 
 class PipelineHandler:
-    def __init__(self, core=None, CC=None, DB=None):
-        if None in (core, CC, DB):
-            raise Exception('<PipelineBuilder INIT> All parameters must be specified.')
+    def __init__(self):
 
-        self.core = core
+        self.core: Core = EnvDistributor.get_core()
 
-        self.ContractContainer = CC
-        self.db = DB
+        self.ContractContainer = ContractContainer
+        self.db = DatabaseBroker
 
         self.t1 = Thread(target=self.request_prices).start()
         self.t2 = Thread(target=self.write_to_database).start()
@@ -23,9 +23,6 @@ class PipelineHandler:
         self.tws_con = self.core.tws_con
 
         self.last_write_time: datetime | None = None
-        self.wtd_shutdown: bool = False
-
-        self.data_requester_wait: bool = False
 
     def request_prices(self):
         """
@@ -115,7 +112,7 @@ class PipelineHandler:
         while not self.core.writable_pool:
             sleep(10)
 
-        self.db = self.db(core=self.core, CC=self.ContractContainer)
+        self.db = self.db()
 
         while True:
             try:
