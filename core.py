@@ -6,11 +6,31 @@ import json
 import os
 import psutil
 import pytz
-from typing import Callable
+from typing import Callable, NewType
+
+ContractContainer = NewType('ContractContainer', object)
+TWSCon = NewType('TWSCon', object)
 
 load_dotenv('.env')
 
 DEBUG_MODE: bool = False
+
+
+class EnvDistributor:
+    """
+    Save Core instance as class variable to be accessed via imports-> cls.method getter
+    """
+    core = None
+
+    @classmethod
+    def set_core(cls, core):
+        cls.core = core
+
+    @classmethod
+    def get_core(cls):
+        if not isinstance(cls.core, Core):
+            raise Exception('Core not set.')
+        return cls.core
 
 
 class Core:
@@ -63,24 +83,24 @@ class Core:
     reqId_1: int = 1
     reqId_2: int = 100_000_000
 
-    underlying_list: dict[str, list[str]] = {'STK': []}
+    underlying_list: dict[str: list[str]] = {'STK': []}
 
-    contract_pool: dict[str, list[object]] = {'STK': [],
+    contract_pool: dict[str: list[object]] = {'STK': [],
                                               'OPT': [],
                                               'EXP': []}
 
-    immediate_pool: list["ContractContainer"] = []
+    immediate_pool: list[ContractContainer] = []
 
-    writable_pool: list["ContractContainer"] = []
+    writable_pool: list[ContractContainer] = []
 
-    timeout_breaker: dict[int, int] = {4: 20, 8: 40, 26: 120, 52: 180, 9999: 300}
+    timeout_breaker: dict[int: int] = {4: 20, 8: 40, 26: 120, 52: 180, 9999: 300}
 
     stk_update_timer: datetime = datetime.today().replace(hour=STK_UPDATE_TIME[0], minute=STK_UPDATE_TIME[1], second=0, microsecond=0)
     exp_update_timer: datetime = datetime.today().replace(hour=EXP_UPDATE_TIME[0], minute=EXP_UPDATE_TIME[1], second=0, microsecond=0)
     monday_roll_timer: datetime = next(filter(lambda x: x.weekday() == 0, ((datetime.today() + timedelta(days=x + 1) for x in range(0, 7))))).replace(hour=6, minute=0)
 
     startup: bool = True
-    tws_con: "TWSCon" = None
+    tws_con: TWSCon = None
 
     last_request: datetime = None
     last_receive: datetime = None
@@ -98,9 +118,11 @@ class Core:
         self.create_time_offset_table()
 
         # Pipeline time triggers
-        self.stk_last_update: float | datetime = datetime.fromtimestamp(read_data_json(self).get('STK_LAST_UPDATE', 0))
-        self.exp_last_update: float | datetime = datetime.fromtimestamp(read_data_json(self).get('EXP_LAST_UPDATE', 0))
-        self.last_opt_build: float | datetime = datetime.fromtimestamp(read_data_json(self).get('LAST_OPT_BUILD', 0))
+        self.stk_last_update: datetime = datetime.fromtimestamp(read_data_json(self).get('STK_LAST_UPDATE', 0))
+        self.exp_last_update: datetime = datetime.fromtimestamp(read_data_json(self).get('EXP_LAST_UPDATE', 0))
+        self.last_opt_build: datetime = datetime.fromtimestamp(read_data_json(self).get('LAST_OPT_BUILD', 0))
+
+        EnvDistributor.set_core(self)
 
     def validate_env_input(self):
         if self.CANDLE_LENGTH not in ('1 secs', '5 secs', '10 secs', '15 secs', '30 secs', '1 min', '2 mins', '3 mins', '5 mins', '10 mins', '15 mins', '20 mins', '30 mins', '1 hour', '2 hours', '3 hours', '4 hours', '8 hours', '1 day', '1W', '1M'):
@@ -147,7 +169,13 @@ def tprint(text: str = '', *args, debug: bool = False, **kwargs):
 
 
 def kill_ibgateway():
-    pids = {psutil.Process(x).name(): x for x in psutil.pids()}
+    tprint('Searching for PID.')
+    while True:
+        try:
+            pids = {psutil.Process(x).name(): x for x in psutil.pids()}
+            break
+        except psutil.NoSuchProcess:
+            pass
 
     if pid := pids.get('ibgateway.exe'):
         psutil.Process(pid).kill()
@@ -156,7 +184,7 @@ def kill_ibgateway():
         tprint('IBGateway process not found.')
 
 
-def start_ibgateway(core):
+def start_ibgateway(core: Core):
     if os.path.exists(core.STARTGW_IBC_PATH):
         os.system(core.STARTGW_IBC_PATH)
     else:
@@ -165,7 +193,7 @@ def start_ibgateway(core):
     tprint(f'IBGateway started.')
 
 
-def read_data_json(core) -> dict[str: str | float] | defaultdict:
+def read_data_json(core: Core) -> dict[str: str | float] | defaultdict:
     if os.path.exists(os.path.join(os.path.dirname(__file__), core.JSON_SESSION_FILE_NAME)):
         with open(core.JSON_SESSION_FILE_NAME, 'r', encoding='utf-8') as f:
             loaded_data = json.load(f)
@@ -180,6 +208,12 @@ def write_data_json(core, data: dict = None):
 
     loaded_data = read_data_json(core)
     for k, v in data.items():
+        if isinstance(v, datetime):
+            v = v.timestamp()
+
+        if not isinstance(v, str | int | float | bool):
+            raise TypeError('Json data values must be primitive types.')
+
         loaded_data[k] = v
 
     with open(core.JSON_SESSION_FILE_NAME, 'w', encoding='utf-8') as f:
