@@ -6,10 +6,8 @@ import json
 import os
 import psutil
 import pytz
-from typing import Callable, NewType
+from typing import Callable
 
-ContractContainer = NewType('ContractContainer', object)
-TWSCon = NewType('TWSCon', object)
 
 load_dotenv('.env')
 
@@ -83,15 +81,13 @@ class Core:
     reqId_1: int = 1
     reqId_2: int = 100_000_000
 
-    underlying_list: dict[str: list[str]] = {'STK': []}
+    underlying_list: dict[str, list[str]] = {'STK': []}
 
-    contract_pool: dict[str: list[object]] = {'STK': [],
-                                              'OPT': [],
-                                              'EXP': []}
+    #contract_pool: dict[str, list['ContractContainer']] = {'STK': [], 'OPT': [], 'EXP': []}
 
-    immediate_pool: list[ContractContainer] = []
+    immediate_pool: list['ContractContainer'] = []
 
-    writable_pool: list[ContractContainer] = []
+    writable_pool: list['ContractContainer'] = []
 
     timeout_breaker: dict[int: int] = {4: 20, 8: 40, 26: 120, 52: 180, 9999: 300}
 
@@ -100,7 +96,7 @@ class Core:
     monday_roll_timer: datetime = next(filter(lambda x: x.weekday() == 0, ((datetime.today() + timedelta(days=x + 1) for x in range(0, 7))))).replace(hour=6, minute=0)
 
     startup: bool = True
-    tws_con: TWSCon = None
+    tws_con: 'TWSCon' = None
 
     last_request: datetime = None
     last_receive: datetime = None
@@ -218,7 +214,5 @@ def write_data_json(core, data: dict = None):
 
     with open(core.JSON_SESSION_FILE_NAME, 'w', encoding='utf-8') as f:
         json.dump(loaded_data, f, indent=4)
-
-
 
 

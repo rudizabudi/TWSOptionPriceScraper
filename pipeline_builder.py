@@ -33,6 +33,8 @@ class PipelineBuilder:
         constituents_list_updater(self.core)
         load_constituents(self.core)
 
+
+
     def startup_build_sequence(self):
         """
         Orchestrates startup build of all self.core.contract_pool['STK' | 'EXP' | 'OPT'] types
@@ -267,7 +269,7 @@ class PipelineBuilder:
                             self.dump_options_to_file(expired_list=True)
 
                     if not self.core.contract_pool['EXP'] or len(self.core.contract_pool['EXP']) == 0:
-                        self.core.exp_last_update = datetime.now().timestamp()
+                        self.core.exp_last_update = datetime.now()
                         write_data_json(self.core, data={'EXP_LAST_UPDATE': self.core.exp_last_update})
 
                 elif len(self.core.contract_pool['STK'][self.stk_sorter_pointer:]) > 0:

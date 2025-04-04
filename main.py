@@ -2,7 +2,6 @@ from datetime import timedelta
 from time import sleep
 
 from core import Core, tprint, kill_ibgateway, start_ibgateway
-from database_broker import DatabaseBroker
 from pipeline_builder import PipelineBuilder
 from pipeline_handler import PipelineHandler
 from tws_api import TWSCon
@@ -28,7 +27,7 @@ if __name__ == '__main__':
         while True:
             if not tws_con.isConnected():
                 tws_con = TWSCon(core=core)
-                #core.write_tws_connection(tws_con)
+                # core.write_tws_connection(tws_con)
                 sleep(10)
 
             try:
@@ -62,4 +61,3 @@ DONE: Add TWS Gateway restart in main.py loop if it's not responding/glitching
 DONE: Rebuild constituents loader.
 DONE: .env input validation
 """
-
