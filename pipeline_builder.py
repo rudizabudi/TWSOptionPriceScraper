@@ -7,30 +7,27 @@ import random
 from threading import Thread
 from time import sleep
 
-import core
 from contract_container import ContractContainer
-from core import Core, tprint, write_data_json
+from core import Core, EnvDistributor, tprint, write_data_json
 from database_broker import DatabaseBroker
 from constituents_handler import constituents_list_updater, load_constituents
 from tws_api import TWSCon
 
 
 class PipelineBuilder:
-    def __init__(self, core: Core = None, CC: type[ContractContainer] = None, DB: type[DatabaseBroker] = None):
-        if None in (core, CC, DB):
-            raise Exception('<PipelineBuilder INIT> All parameters must be specified.')
+    def __init__(self):
+        self.core: Core = EnvDistributor.get_core()
 
-        self.core: Core = core
-        self.ContractContainer: ContractContainer = CC
+        self.ContractContainer: type[ContractContainer] = ContractContainer
 
-        self.db: DatabaseBroker = DB(core=self.core, CC=self.ContractContainer)
+        self.db: DatabaseBroker = DatabaseBroker()
 
-        self.tws_con: TWSCon = core.tws_con
+        self.tws_con: TWSCon = self.core.tws_con
 
         self.t1: Thread = Thread(target=self.pipeline_sorter)
         self.t1.start()
 
-        self.option_exp_max_length:int = 0  # max length of current expired options batch
+        self.option_exp_max_length: int = 0  # max length of current expired options batch
         self.stk_sorter_pointer: int = 0  # queue pointer to the current index of self.core.contract_pool['STK']
 
         constituents_list_updater(self.core)
@@ -74,7 +71,7 @@ class PipelineBuilder:
         # elif datetime.today().weekday() in [5, 6]:
         #     'expired_option_contracts.pkl'
         else:
-            tprint('Generating expired option list skipped because they are up to date.')
+            tprint('Generating expired option list skipped because it is up to date.')
 
         self.option_exp_max_length = len(self.core.contract_pool['EXP'])
 
@@ -97,7 +94,7 @@ class PipelineBuilder:
 
         tprint('Building stock contracts...', )
         for symbol in self.core.underlying_list['STK']:
-            stk = self.ContractContainer(self.core, symbol=symbol, secType='STK')
+            stk = self.ContractContainer(symbol=symbol, secType='STK')
 
             stk.set_reqId_assign(self.core.reqId_1, reqType='reqConDetails')
             self.tws_con.reqContractDetails(self.core.reqId_1, stk.get_contract())
@@ -143,7 +140,7 @@ class PipelineBuilder:
             opt = None
             for strike in stk.get_strikes():
                 for right in ['C', 'P']:
-                    opt = self.ContractContainer(self.core, symbol=stk.get_symbol(), secType='OPT', strike=strike, right=right, lastTradeDateOrContractMonth=expiry)
+                    opt = self.ContractContainer(symbol=stk.get_symbol(), secType='OPT', strike=strike, right=right, lastTradeDateOrContractMonth=expiry)
                     opt_contracts.append(opt)
                     stk.register_derivative_child(opt)
 
@@ -152,8 +149,8 @@ class PipelineBuilder:
             else:
                 tprint(f'Could not check for table existence for {stk.get_symbol()} OPT on {expiry}.')
 
-        self.core.last_opt_build = datetime.now().timestamp()
-        write_data_json(self.core, data={'LAST_OPTION_BUILD': self.core.last_opt_build})
+        self.core.last_opt_build = datetime.now()
+        write_data_json(self.core, data={'LAST_OPT_BUILD': self.core.last_opt_build})
 
         return opt_contracts
 
@@ -280,7 +277,7 @@ class PipelineBuilder:
                     self.stk_sorter_pointer += 1
 
                     if self.stk_sorter_pointer >= len(self.core.contract_pool['STK']):
-                        self.core.stk_last_update = datetime.now().timestamp()
+                        self.core.stk_last_update = datetime.now()
 
                         write_data_json(self.core, data={'STK_LAST_UPDATE': self.core.stk_last_update})
 
@@ -386,9 +383,11 @@ class PipelineBuilder:
             with open(file_name, 'rb') as f:
                 contract_list = pickle.load(f)
 
-            tprint(f'{len(contract_list)}{type_name.capitalize()} options loaded from {file_name}.')
+            tprint(f'{len(contract_list):,} {type_name} options loaded from {file_name}.')
 
             for contract in contract_list:
                 contract.connect_core_space(self.core)
+
+            self.core.contract_pool['OPT'] = contract_list
 
             tprint(f'Loaded {type_name} contracts reconnected to Core space.')

@@ -3,7 +3,7 @@ from ibapi.contract import Contract
 import pyodbc
 from typing import Callable
 
-from core import tprint
+from core import Core, EnvDistributor, tprint
 
 
 class DatabaseBroker:
@@ -11,16 +11,17 @@ class DatabaseBroker:
     Container to hold all related data of a IBAPI contract instance.
     Written for T-SQL.
     """
-    def __init__(self, core=None, CC=None):
-        if None in (core, CC):
-            raise Exception('<DatabaseBroker INIT> All parameters must be specified.')
+
+    def __init__(self):
+
+        core: Core = EnvDistributor.get_core()
+
         self.connection_string = core.SQL_CONNECTION_STRING
 
         self.table_structure = {}
 
         self.sql_ignore = ['master', 'tempdb', 'model', 'msdb']
 
-        self.ContractContainer = CC
         pass
 
     def sql_query(func) -> Callable:
@@ -89,7 +90,7 @@ class DatabaseBroker:
 
          Args:
              cursor (pyodbc.Cursor): The database cursor. [Provided by wrapper]
-             contract (Contract): The contract object.
+             contract_container (ContractContainer): The contract object.
              create_missing (bool, optional): Whether to create the table if it doesn't exist. Defaults to True.
 
          Returns:
@@ -130,7 +131,7 @@ class DatabaseBroker:
 
         Args:
             cursor (pyodbc.Cursor): The database cursor.
-            contract (object, optional): The contract object. Defaults to None.
+            contract_container (ContractContainer): The contract object.
 
         Raises:
             TypeError: If the contract is not an instance of the Contract class.
