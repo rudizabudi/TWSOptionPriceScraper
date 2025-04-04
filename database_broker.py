@@ -1,5 +1,4 @@
 from datetime import datetime
-from ibapi.contract import Contract
 import pyodbc
 from typing import Callable
 

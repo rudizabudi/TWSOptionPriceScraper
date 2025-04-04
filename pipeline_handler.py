@@ -15,8 +15,7 @@ class PipelineHandler:
 
         self.core: Core = EnvDistributor.get_core()
         self.db: DatabaseBroker = DatabaseBroker()
-
-        self.ContractContainer: ContractContainer = ContractContainer
+        self.ContractContainer: type[ContractContainer] = ContractContainer
 
         self.t1 = Thread(target=self.request_prices).start()
         self.t2 = Thread(target=self.write_to_database).start()
@@ -78,7 +77,8 @@ class PipelineHandler:
                 self.core.reqId_2 += 1
                 timeout_secs = 60
                 for k in self.core.timeout_breaker.keys():
-                    if duration <= k: timeout_secs = self.core.timeout_breaker[k]
+                    if duration <= k:
+                        timeout_secs = self.core.timeout_breaker[k]
                 time_breaker = datetime.now() + timedelta(seconds=timeout_secs)
                 while not contract_instance.get_error_flag() and not contract_instance.get_historical_data_end() and datetime.now() < time_breaker:
                     if not self.core.tws_con.isConnected():
@@ -169,7 +169,6 @@ class PipelineHandler:
 
                 self.core.writable_pool.pop(0)
 
-            except IndexError as err:
+            except IndexError:
                 while len(self.core.writable_pool) == 0:
                     sleep(.1)
-
