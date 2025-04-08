@@ -83,7 +83,7 @@ class Core:
 
     underlying_list: dict[str, list[str]] = {'STK': []}
 
-    #contract_pool: dict[str, list['ContractContainer']] = {'STK': [], 'OPT': [], 'EXP': []}
+    contract_pool: dict[str, list['ContractContainer']] = {'STK': [], 'OPT': [], 'EXP': []}
 
     immediate_pool: list['ContractContainer'] = []
 
