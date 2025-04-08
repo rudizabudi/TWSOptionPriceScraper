@@ -33,8 +33,6 @@ class PipelineBuilder:
         constituents_list_updater(self.core)
         load_constituents(self.core)
 
-
-
     def startup_build_sequence(self):
         """
         Orchestrates startup build of all self.core.contract_pool['STK' | 'EXP' | 'OPT'] types
@@ -50,8 +48,11 @@ class PipelineBuilder:
         """
 
         self.build_stk_contracts()
-
-        if self.core.last_opt_build <= datetime.now() - timedelta(days=self.core.OPT_LIST_CURRENT):
+        opt_save_file_exists = os.path.exists(os.path.join(os.path.dirname(__file__), self.core.MAIN_OPT_FILE_NAME))
+        if self.core.last_opt_build > datetime.now() - timedelta(days=self.core.OPT_LIST_CURRENT) and opt_save_file_exists:
+            tprint('Loading prior option contracts.')
+            self.load_options_from_file(main_list=True)
+        else:
             tprint('Building option contracts...')
             for stk in self.core.contract_pool['STK']:
                 self.core.contract_pool['OPT'].extend(self.build_opt_contracts(stk=stk))
@@ -62,9 +63,6 @@ class PipelineBuilder:
 
             tprint('Building option contracts ended.')
             self.dump_options_to_file(main_list=True)
-        else:
-            tprint('Loading prior option contracts.')
-            self.load_options_from_file(main_list=True)
 
         current_time = datetime.now().time()
         last_scheduled_update = self.core.exp_update_timer - timedelta(days=1)
@@ -374,22 +372,23 @@ class PipelineBuilder:
                      main_list (optional): boolswitch to indicate if main option list to be dumped
                      expired_list (optional): boolswitch to indicate if expired option list to be dumped
          :output:    :fills selected option queue lists with previously created and saved security instances
-         """
+        """
+
         selection_list = []
         if main_list:
-            selection_list.append(('main', self.core.MAIN_OPT_FILE_NAME, self.core.contract_pool['OPT']))
+            selection_list.append(('main', self.core.MAIN_OPT_FILE_NAME, 'OPT'))
         if expired_list:
-            selection_list.append(('expired', self.core.EXP_OPT_FILE_NAME, self.core.contract_pool['EXP']))
+            selection_list.append(('expired', self.core.EXP_OPT_FILE_NAME, 'EXP'))
 
         for type_name, file_name, contract_list in selection_list:
             with open(file_name, 'rb') as f:
-                contract_list = pickle.load(f)
+                contract_data = pickle.load(f)
 
-            tprint(f'{len(contract_list):,} {type_name} options loaded from {file_name}.')
+            tprint(f'{len(contract_data):,} {type_name} options loaded from {file_name}.')
 
-            for contract in contract_list:
+            for contract in contract_data:
                 contract.connect_core_space(self.core)
 
-            self.core.contract_pool['OPT'] = contract_list
+            self.core.contract_pool[contract_list] = contract_data
 
-            tprint(f'Loaded {type_name} contracts reconnected to Core space.')
+            tprint(f'{type_name.capitalize()} contracts loaded and reconnected to Core space.')
