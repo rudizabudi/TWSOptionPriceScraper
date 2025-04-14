@@ -8,7 +8,6 @@ import psutil
 import pytz
 from typing import Callable
 
-
 load_dotenv('.env')
 
 DEBUG_MODE: bool = False
@@ -150,9 +149,9 @@ class Core:
         if not isinstance(self.STARTGW_IBC_PATH, str):
             raise ValueError(f'Invalid value for START_GW_PATH: {self.STARTGW_IBC_PATH}')
 
-    def create_time_offset_table(self):
-        for day_dif in range(-30, 365):
-            date = datetime.now(timezone.utc) - timedelta(days=day_dif)
+    def create_time_offset_table(self, start_range: int = -30, end_range: int = 365):
+        for day_dif in range(start_range, end_range):
+            date = datetime.now(timezone.utc) + timedelta(days=day_dif)
 
             local_time = date.astimezone(pytz.timezone(self.LOCAL_TZ))
             trade_time = date.astimezone(pytz.timezone(self.EXCHANGE_TZ))
@@ -201,7 +200,7 @@ def read_data_json(core: Core) -> dict[str: str | float] | defaultdict:
 def write_data_json(core, data: dict = None):
     if not isinstance(data, dict):
         raise TypeError('Json data must be a dictionary.')
-
+    tprint(f'Write this to json: {data}')
     loaded_data = read_data_json(core)
     for k, v in data.items():
         if isinstance(v, datetime):

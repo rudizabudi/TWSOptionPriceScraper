@@ -7,10 +7,10 @@ import random
 from threading import Thread
 from time import sleep
 
+from constituents_handler import constituents_list_updater, load_constituents
 from contract_container import ContractContainer
 from core import Core, EnvDistributor, tprint, write_data_json
 from database_broker import DatabaseBroker
-from constituents_handler import constituents_list_updater, load_constituents
 from tws_api import TWSCon
 
 
@@ -62,6 +62,7 @@ class PipelineBuilder:
                 tprint(f'Option contracts randomized.')
 
             tprint('Building option contracts ended.')
+            write_data_json(self.core, data={'LAST_OPT_BUILD': self.core.last_opt_build})
             self.dump_options_to_file(main_list=True)
 
         current_time = datetime.now().time()
@@ -150,7 +151,6 @@ class PipelineBuilder:
                 tprint(f'Could not check for table existence for {stk.get_symbol()} OPT on {expiry}.')
 
         self.core.last_opt_build = datetime.now()
-        write_data_json(self.core, data={'LAST_OPT_BUILD': self.core.last_opt_build})
 
         return opt_contracts
 
