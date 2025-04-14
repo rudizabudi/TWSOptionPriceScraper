@@ -1,11 +1,11 @@
 from datetime import datetime, timedelta
 from enum import Enum, auto
+from threading import Thread
 import time
 from typing import NoReturn
 
 from ibapi.client import EClient
 from ibapi.wrapper import EWrapper
-from threading import Thread
 
 from core import tprint, start_ibgateway
 

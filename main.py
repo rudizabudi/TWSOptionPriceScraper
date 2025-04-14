@@ -6,7 +6,6 @@ from pipeline_builder import PipelineBuilder
 from pipeline_handler import PipelineHandler
 from tws_api import TWSCon
 
-
 if __name__ == '__main__':
     def main():
         core: Core = Core()
@@ -54,6 +53,7 @@ TODO: Switch from threading to Python3.13 open GIL
 TODO: Make constituents check and option_list_creation (-> new SQL tables) periodical
 TODO: Containerize anew
 TODO: Add manual sql_maintenance.py maintenance functions to controller loop
+TODO: Split exp_option date logic into creation and finish. 
 
 :
 DONE: Adapt local time conditions to UTC. Make TZ aware

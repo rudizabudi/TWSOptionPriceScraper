@@ -136,7 +136,12 @@ class PipelineHandler:
                 for i, (dt, ohlc) in enumerate(contract_instance.get_price_data().items(), start=1):
                     dt_dt = datetime.strptime(dt, '%Y%m%d %H:%M:%S')
                     if not existing_dates or dt_dt not in existing_dates:
+                        if (dt_dt.year, dt_dt.month, dt_dt.day) not in self.core.utc_diffs.keys():
+                            new_start_range = datetime.today() - datetime(dt_dt.year, dt_dt.month, dt_dt.day)
+                            self.core.create_time_offset_table(start_range=-1 * (new_start_range.days + 30))
+
                         time_offset = self.core.NORMALIZED_TIME_DIFF + self.core.utc_diffs[dt_dt.year, dt_dt.month, dt_dt.day]
+
                         dt_dt += timedelta(hours=time_offset)
                         dt = dt_dt.strftime('%Y%m%d %H:%M:%S')
 

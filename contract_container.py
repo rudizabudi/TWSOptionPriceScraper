@@ -1,6 +1,7 @@
 from datetime import datetime
-from ibapi.contract import Contract
 from typing import NoReturn
+
+from ibapi.contract import Contract
 
 from core import Core, EnvDistributor
 from database_broker import DatabaseBroker
