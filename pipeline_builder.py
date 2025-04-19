@@ -68,7 +68,9 @@ class PipelineBuilder:
         current_time = datetime.now().time()
         last_scheduled_update = self.core.exp_update_timer - timedelta(days=1)
         if current_time < self.core.exp_update_timer.time() and self.core.exp_last_update < last_scheduled_update:
-            self.get_exp_options()
+            #self.get_exp_options()
+            pass
+
         # elif datetime.today().weekday() in [5, 6]:
         #     'expired_option_contracts.pkl'
         else:
@@ -114,7 +116,7 @@ class PipelineBuilder:
                     sleep(.1)
                     pass
 
-        self.stk_sorter_pointer = len(self.core.contract_pool['STK'])
+        #self.stk_sorter_pointer = len(self.core.contract_pool['STK'])
 
         tprint('Building stock contracts ended.')
 
@@ -216,7 +218,8 @@ class PipelineBuilder:
 
             for key in exp_order.keys():
                 for contract in exp_order[key]:
-                    self.core.contract_pool['EXP'].append(contract)
+                    if contract not in self.core.contract_pool['EXP']:
+                        self.core.contract_pool['EXP'].append(contract)
 
             tprint('Getting expired option contracts ended.')
 
