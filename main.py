@@ -33,7 +33,7 @@ if __name__ == '__main__':
                 if core.last_request - core.last_receive > timedelta(seconds=core.GLITCH_DETECTOR_THRESHOLD):
                     tprint(f'TWS API might not send data any longer.')
                     if core.USE_IBC:
-                        kill_ibgateway()
+                        kill_ibgateway(core)
                         sleep(30)
                         start_ibgateway(core)
                         sleep(30)
@@ -54,8 +54,9 @@ TODO: Make constituents check and option_list_creation (-> new SQL tables) perio
 TODO: Containerize anew
 TODO: Add manual sql_maintenance.py maintenance functions to controller loop
 TODO: Split exp_option date logic into creation and finish. 
+TODO: Find a cleaner way to close IBC instead of killing JVM instance
 
-:
+
 DONE: Adapt local time conditions to UTC. Make TZ aware
 DONE: Add TWS Gateway restart in main.py loop if it's not responding/glitching
 DONE: Rebuild constituents loader.

@@ -56,6 +56,7 @@ class Core:
     # IBC settings for TWS API restart
     USE_IBC: bool = bool(os.getenv('USE_IBC'))
     STARTGW_IBC_PATH: str = os.getenv('START_GW_PATH')
+    IBC_PROCESS_NAME: str = 'java.exe'
 
     # Further user defined settings
     IP_LENGTH: int = 10  # length for immediate_pool length. Queue between pipeline_builder and pipeline_handler
@@ -163,7 +164,7 @@ def tprint(text: str = '', *args, debug: bool = False, **kwargs):
         print(f'{datetime.now().strftime('%H:%M:%S')} : {text}')
 
 
-def kill_ibgateway():
+def kill_ibgateway(core: Core):
     tprint('Searching for PID.')
     while True:
         try:
@@ -172,7 +173,7 @@ def kill_ibgateway():
         except psutil.NoSuchProcess:
             pass
 
-    if pid := pids.get('ibgateway.exe'):
+    if pid := pids.get(core.IBC_PROCESS_NAME):
         psutil.Process(pid).kill()
         tprint(f'IBGateway closed.')
     else:
