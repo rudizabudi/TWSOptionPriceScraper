@@ -48,6 +48,14 @@ class ContractContainer:
                 return f'<Data Container Instance> {self.contract.symbol} {self.contract.strike}{self.contract.right} {dt_s} {self.contract.secType}'
         return None
 
+    def __eq__(self, other) -> bool:
+        if not isinstance(other, ContractContainer):
+            raise TypeError(f"Can't compare {type(self)} to {type(other)}")
+        if not other.contract:
+            raise Exception('No contract instance found in other contract container.')
+
+        return self.contract == other.contract
+
     def build_contract(self, **kwargs) -> NoReturn:
         self.contract.symbol = kwargs['symbol']
         self.contract.secType = kwargs['secType']
