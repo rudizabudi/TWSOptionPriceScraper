@@ -44,8 +44,8 @@ This scripts supports Live and Paper Trading accounts from IBKR or official rese
 > 
 > * (local) Microsoft SQL Server (TSQL). Tested for SQL Server 2022 v16
 > 
-> * IBKR API: Trader Workstation or IB Gateway. API v10.30f or newer
-> * https://www.interactivebrokers.com/en/trading/ib-gateway-download.php
+> * IBKR API: Trader Workstation or IB Gateway. API v10.30f or newer 
+https://www.interactivebrokers.com/en/trading/ib-gateway-download.php
 
 ## <ins>Install:</ins>
 > uv sync
