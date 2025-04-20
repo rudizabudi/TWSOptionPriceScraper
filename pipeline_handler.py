@@ -1,21 +1,21 @@
-from datetime import date, datetime, timedelta
+from datetime import datetime, timedelta
 from math import floor, ceil
 from threading import Thread
-from time import sleep, perf_counter_ns
+from time import sleep
 import traceback
 
-from core import tprint
+from contract_container import ContractContainer
+from core import Core, EnvDistributor, tprint
+from database_broker import DatabaseBroker
 
 
 class PipelineHandler:
-    def __init__(self, core=None, CC=None, DB=None):
-        if None in (core, CC, DB):
-            raise Exception('<PipelineBuilder INIT> All parameters must be specified.')
 
-        self.core = core
+    def __init__(self):
 
-        self.ContractContainer = CC
-        self.db = DB
+        self.core: Core = EnvDistributor.get_core()
+        self.db: DatabaseBroker = DatabaseBroker()
+        self.ContractContainer: type[ContractContainer] = ContractContainer
 
         self.t1 = Thread(target=self.request_prices).start()
         self.t2 = Thread(target=self.write_to_database).start()
@@ -23,23 +23,20 @@ class PipelineHandler:
         self.tws_con = self.core.tws_con
 
         self.last_write_time: datetime | None = None
-        self.wtd_shutdown: bool = False
-
-        self.data_requester_wait: bool = False
 
     def request_prices(self):
         """
-            Requests historical price data for the contracts in the immediate pool.
+        Requests historical price data for the contracts in the immediate pool.
 
-            This method retrieves the contracts from the immediate pool and requests
-            their historical price data using the TWS API's reqHistoricalData method.
-            Request parameters are determined by present data, e.g. last_update time.
-            The method waits until the data is available or a timeout is reached.
-            The retrieved data is added to the writable pool.
+        This method retrieves the contracts from the immediate pool and requests
+        their historical price data using the TWS API's reqHistoricalData method.
+        Request parameters are determined by present data, e.g. last_update time.
+        The method waits until the data is available or a timeout is reached.
+        The retrieved data is added to the writable pool.
 
-            :input: self.core.immediate_pool :popping
-            :output: self.core.writable_pool :appending
-            """
+        :input: self.core.immediate_pool :popping
+        :output: self.core.writable_pool :appending
+        """
         # print("Request_prices called from:")
         # for line in traceback.format_stack()[:-1]:
         #     print(line.strip())
@@ -71,27 +68,31 @@ class PipelineHandler:
                                                endDateTime=query_time,
                                                durationStr=duration_str,
                                                barSizeSetting=self.core.CANDLE_LENGTH,
-                                               whatToShow="Bid_Ask",
+                                               whatToShow='Bid_Ask',
                                                useRTH=1,
                                                formatDate=1,
                                                keepUpToDate=False,
                                                chartOptions=[])
 
                 self.core.reqId_2 += 1
+                tprint(f'Requested: {contract_instance}: {last_update=}, {duration=}', debug=True)
+
                 timeout_secs = 60
                 for k in self.core.timeout_breaker.keys():
-                    if duration <= k: timeout_secs = self.core.timeout_breaker[k]
+                    if duration <= k:
+                        timeout_secs = self.core.timeout_breaker[k]
+
                 time_breaker = datetime.now() + timedelta(seconds=timeout_secs)
                 while not contract_instance.get_error_flag() and not contract_instance.get_historical_data_end() and datetime.now() < time_breaker:
                     if not self.core.tws_con.isConnected():
                         while not self.tws_con.isConnected():
-                            self.tws_con = self.core.tws_con
+                            #self.tws_con = self.core.tws_con
                             sleep(10)
                         break
                     sleep(.1)
+
                 if contract_instance.get_historical_data_end():
                     self.core.writable_pool.append(contract_instance)
-
                 self.core.immediate_pool.pop(0)
 
             except IndexError:
@@ -102,20 +103,18 @@ class PipelineHandler:
 
     def write_to_database(self):
         """
-            Writes price data from the writable pool to the database.
+        Writes price data from the writable pool to the database.
 
-            This method continuously checks the writable pool for contract instances
-            with price data to be written to the database. It generates and passes on an INSERT query
-            for each contract instance and executes it to write the data to the database.
+        This method continuously checks the writable pool for contract instances
+        with price data to be written to the database. It generates and passes on an INSERT query
+        for each contract instance and executes it to write the data to the database.
 
-            :input: self.core.writable_pool :popping
-            :output: self.db SQL class :pushing
-            """
+        :input: self.core.writable_pool :popping
+        :output: self.db SQL class :pushing
+        """
 
         while not self.core.writable_pool:
             sleep(10)
-
-        self.db = self.db(core=self.core, CC=self.ContractContainer)
 
         while True:
             try:
@@ -136,13 +135,46 @@ class PipelineHandler:
                             VALUES
                             """
 
+                #Normalize requested price data for time offset
+                requested_pricing = {}
+                for dt, ohlc in contract_instance.get_price_data().items():
+                    timestamp = datetime.strptime(dt, '%Y%m%d %H:%M:%S')
+
+                    if (timestamp.year, timestamp.month, timestamp.day) not in self.core.utc_diffs.keys():
+                        new_start_range = datetime.today() - datetime(timestamp.year, timestamp.month, timestamp.day)
+                        self.core.create_time_offset_table(start_range=-1 * (new_start_range.days + 30))
+
+                    time_offset = self.core.NORMALIZED_TIME_DIFF + self.core.utc_diffs[timestamp.year, timestamp.month, timestamp.day]
+
+                    timestamp += timedelta(hours=time_offset)
+                    requested_pricing[timestamp] = ohlc
+
+
+                # tprint(f'Total requested rows: {len(requested_pricing)}')
+                # tprint(f'Total present rows: {len(existing_dates)}')
+                # counter = 0
+                # for dt in requested_pricing.keys():
+                #     if dt not in existing_dates:
+                #         counter += 1
+                #
+                # tprint(f'Total new rows: {counter}')
+
                 iq_rows = []
-                for i, (dt, ohlc) in enumerate(contract_instance.get_price_data().items(), start=1):
-                    dt_dt = datetime.strptime(dt, '%Y%m%d %H:%M:%S')
-                    if not existing_dates or dt_dt not in existing_dates:
-                        time_offset = self.core.NORMALIZED_TIME_DIFF + self.core.utc_diffs[dt_dt.year, dt_dt.month, dt_dt.day]
-                        dt_dt += timedelta(hours=time_offset)
-                        dt = dt_dt.strftime('%Y%m%d %H:%M:%S')
+                for i, (dt, ohlc) in enumerate(requested_pricing.items(), start=1):
+                    if not existing_dates or dt not in existing_dates:
+
+                # iq_rows = []
+                # for i, (dt, ohlc) in enumerate(contract_instance.get_price_data().items(), start=1):
+                #     dt_dt = datetime.strptime(dt, '%Y%m%d %H:%M:%S')
+                #     if not existing_dates or dt_dt not in existing_dates:
+                #         if (dt_dt.year, dt_dt.month, dt_dt.day) not in self.core.utc_diffs.keys():
+                #             new_start_range = datetime.today() - datetime(dt_dt.year, dt_dt.month, dt_dt.day)
+                #             self.core.create_time_offset_table(start_range=-1 * (new_start_range.days + 30))
+                #
+                #         time_offset = self.core.NORMALIZED_TIME_DIFF + self.core.utc_diffs[dt_dt.year, dt_dt.month, dt_dt.day]
+                #
+                #         dt_dt += timedelta(hours=time_offset)
+                #         dt = dt_dt.strftime('%Y%m%d %H:%M:%S')
 
                         match contract_instance.get_secType():
                             case 'STK':
@@ -173,7 +205,6 @@ class PipelineHandler:
 
                 self.core.writable_pool.pop(0)
 
-            except IndexError as err:
+            except IndexError:
                 while len(self.core.writable_pool) == 0:
                     sleep(.1)
-

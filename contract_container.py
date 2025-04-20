@@ -1,9 +1,10 @@
 from datetime import datetime
-from ibapi.contract import Contract
-from database_broker import DatabaseBroker
 from typing import NoReturn
 
-from core import Core, tprint
+from ibapi.contract import Contract
+
+from core import Core, EnvDistributor
+from database_broker import DatabaseBroker
 
 
 class ContractContainer:
@@ -13,15 +14,15 @@ class ContractContainer:
 
     """
 
-    def __init__(self, core, **kwargs):
+    def __init__(self, **kwargs):
 
-        self.core: Core = core
-        self.db = DatabaseBroker(self.core, self)
+        self.core: Core = EnvDistributor.get_core()
+        self.db: DatabaseBroker = DatabaseBroker()
 
         stk_cond: bool = all([x in kwargs.keys() for x in ['symbol', 'secType']])
         opt_cond: bool = all([x in kwargs.keys() for x in ['symbol', 'secType', 'strike', 'right', 'lastTradeDateOrContractMonth']])
 
-        if not stk_cond and not opt_cond: # TODO: Change condition
+        if not stk_cond and not opt_cond:  # TODO: Change condition
             raise Exception('DataContainer: Invalid input to create security contract.')
 
         self.price_data = {}
@@ -46,6 +47,14 @@ class ContractContainer:
                 dt_s: str = datetime.strptime(self.contract.lastTradeDateOrContractMonth, "%Y%m%d").strftime("%d%b%y")
                 return f'<Data Container Instance> {self.contract.symbol} {self.contract.strike}{self.contract.right} {dt_s} {self.contract.secType}'
         return None
+
+    def __eq__(self, other) -> bool:
+        if not isinstance(other, ContractContainer):
+            raise TypeError(f"Can't compare {type(self)} to {type(other)}")
+        if not other.contract:
+            raise Exception('No contract instance found in other contract container.')
+
+        return self.contract == other.contract
 
     def build_contract(self, **kwargs) -> NoReturn:
         self.contract.symbol = kwargs['symbol']
@@ -130,9 +139,11 @@ class ContractContainer:
 
     def set_strexp(self,  expiries: list[str], strikes: list[int], ** kwargs) -> NoReturn:
         for x in expiries:
-            if x not in self.expiries: self.expiries.append(x)
+            if x not in self.expiries:
+                self.expiries.append(x)
         for x in strikes:
-            if x not in self.strikes: self.strikes.append(x)
+            if x not in self.strikes:
+                self.strikes.append(x)
 
     def set_reqId_assign(self, reqId: int, reqType: str, ** kwargs) -> NoReturn:
         match reqType:
@@ -190,6 +201,10 @@ class ContractContainer:
 
     def get_historical_data_end(self, **kwargs) -> bool:
         return self.historical_data_end
+
+    @classmethod
+    def get_contract_container(cls):
+        return cls
 
 
 

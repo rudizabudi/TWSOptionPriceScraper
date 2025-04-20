@@ -7,29 +7,27 @@ import random
 from threading import Thread
 from time import sleep
 
-from contract_container import ContractContainer
-from core import Core, tprint, write_data_json
-from database_broker import DatabaseBroker
 from constituents_handler import constituents_list_updater, load_constituents
+from contract_container import ContractContainer
+from core import Core, EnvDistributor, tprint, write_data_json
+from database_broker import DatabaseBroker
 from tws_api import TWSCon
 
 
 class PipelineBuilder:
-    def __init__(self, core: Core = None, CC: ContractContainer = None, DB: DatabaseBroker = None):
-        if None in (core, CC, DB):
-            raise Exception('<PipelineBuilder INIT> All parameters must be specified.')
+    def __init__(self):
+        self.core: Core = EnvDistributor.get_core()
 
-        self.core: Core = core
-        self.ContractContainer: ContractContainer = CC
+        self.ContractContainer: type[ContractContainer] = ContractContainer
 
-        self.db: DatabaseBroker = DB(core=self.core, CC=self.ContractContainer)
+        self.db: DatabaseBroker = DatabaseBroker()
 
-        self.tws_con: TWSCon = core.tws_con
+        self.tws_con: TWSCon = self.core.tws_con
 
         self.t1: Thread = Thread(target=self.pipeline_sorter)
         self.t1.start()
 
-        self.option_exp_max_length:int = 0  # max length of current expired options batch
+        self.option_exp_max_length: int = 0  # max length of current expired options batch
         self.stk_sorter_pointer: int = 0  # queue pointer to the current index of self.core.contract_pool['STK']
 
         constituents_list_updater(self.core)
@@ -50,25 +48,33 @@ class PipelineBuilder:
         """
 
         self.build_stk_contracts()
+        opt_save_file_exists = os.path.exists(os.path.join(os.path.dirname(__file__), self.core.MAIN_OPT_FILE_NAME))
+        if self.core.last_opt_build > datetime.now() - timedelta(days=self.core.OPT_LIST_CURRENT) and opt_save_file_exists:
+            tprint('Loading prior option contracts.')
+            self.load_options_from_file(main_list=True)
+        else:
+            tprint('Building option contracts...')
+            for stk in self.core.contract_pool['STK']:
+                self.core.contract_pool['OPT'].extend(self.build_opt_contracts(stk=stk))
 
-        tprint('Building option contracts...')
-        for stk in self.core.contract_pool['STK']:
-            self.core.contract_pool['OPT'].extend(self.build_opt_contracts(stk=stk))
+            if self.core.RANDOMIZE_OPTS:
+                random.shuffle(self.core.contract_pool['OPT'])
+                tprint(f'Option contracts randomized.')
 
-        if self.core.RANDOMIZE_OPTS:
-            random.shuffle(self.core.contract_pool['OPT'])
-            tprint(f'Option contracts randomized.')
-
-        tprint('Building option contracts ended.')
+            tprint('Building option contracts ended.')
+            write_data_json(self.core, data={'LAST_OPT_BUILD': self.core.last_opt_build})
+            self.dump_options_to_file(main_list=True)
 
         current_time = datetime.now().time()
         last_scheduled_update = self.core.exp_update_timer - timedelta(days=1)
         if current_time < self.core.exp_update_timer.time() and self.core.exp_last_update < last_scheduled_update:
-            self.get_exp_options()
+            #self.get_exp_options()
+            pass
+
         # elif datetime.today().weekday() in [5, 6]:
         #     'expired_option_contracts.pkl'
         else:
-            tprint('Generating expired option list skipped because they are up2date.')
+            tprint('Generating expired option list skipped because it is up to date.')
 
         self.option_exp_max_length = len(self.core.contract_pool['EXP'])
 
@@ -91,7 +97,7 @@ class PipelineBuilder:
 
         tprint('Building stock contracts...', )
         for symbol in self.core.underlying_list['STK']:
-            stk = self.ContractContainer(self.core, symbol=symbol, secType='STK')
+            stk = self.ContractContainer(symbol=symbol, secType='STK')
 
             stk.set_reqId_assign(self.core.reqId_1, reqType='reqConDetails')
             self.tws_con.reqContractDetails(self.core.reqId_1, stk.get_contract())
@@ -110,7 +116,7 @@ class PipelineBuilder:
                     sleep(.1)
                     pass
 
-        self.stk_sorter_pointer = len(self.core.contract_pool['STK'])
+        #self.stk_sorter_pointer = len(self.core.contract_pool['STK'])
 
         tprint('Building stock contracts ended.')
 
@@ -137,7 +143,7 @@ class PipelineBuilder:
             opt = None
             for strike in stk.get_strikes():
                 for right in ['C', 'P']:
-                    opt = self.ContractContainer(self.core, symbol=stk.get_symbol(), secType='OPT', strike=strike, right=right, lastTradeDateOrContractMonth=expiry)
+                    opt = self.ContractContainer(symbol=stk.get_symbol(), secType='OPT', strike=strike, right=right, lastTradeDateOrContractMonth=expiry)
                     opt_contracts.append(opt)
                     stk.register_derivative_child(opt)
 
@@ -145,6 +151,8 @@ class PipelineBuilder:
                 self.db.check_table_exists(contract_container=opt)
             else:
                 tprint(f'Could not check for table existence for {stk.get_symbol()} OPT on {expiry}.')
+
+        self.core.last_opt_build = datetime.now()
 
         return opt_contracts
 
@@ -166,16 +174,7 @@ class PipelineBuilder:
             weekend_cond = (datetime.today() - datetime.fromtimestamp(m_time)) <= timedelta(hours=60) and datetime.fromtimestamp(m_time).weekday() in [4, 5, 6]
             workday_cond = (datetime.today() - datetime.fromtimestamp(m_time)) <= timedelta(hours=18) and datetime.fromtimestamp(m_time).weekday() not in [4, 5, 6]
             if weekend_cond or workday_cond:
-                with open(self.core.EXP_OPT_FILE_NAME, 'rb') as f:
-                    self.core.contract_pool['EXP'] = pickle.load(f)
-
-                exp_options_loaded = True
-                tprint(f'Expired options loaded from {self.core.EXP_OPT_FILE_NAME}.')
-
-                for contract in self.core.contract_pool['EXP']:
-                    contract.connect_core_space(self.core)
-
-                tprint(f'Loaded expired contracts reconnected to Core space.')
+                self.load_options_from_file(expired_list=True)
 
         except (FileNotFoundError, EOFError):
             pass
@@ -219,37 +218,12 @@ class PipelineBuilder:
 
             for key in exp_order.keys():
                 for contract in exp_order[key]:
-                    self.core.contract_pool['EXP'].append(contract)
+                    if contract not in self.core.contract_pool['EXP']:
+                        self.core.contract_pool['EXP'].append(contract)
 
             tprint('Getting expired option contracts ended.')
 
-            self.dump_exp_options_to_file()
-            # save_exp_options = True
-            # options_saved = False
-            # while save_exp_options and not options_saved:
-                # try:
-                #     if save_exp_options:
-                #
-                #         save_contracts = []
-                #         for contract in self.core.contract_pool['EXP']:
-                #             contract.disconnect_core_space()
-                #             save_contracts.append(contract)
-                #
-                #         with open(self.core.EXP_OPT_FILE_NAME, 'wb') as file:
-                #             pass
-                #
-                #         with open(self.core.EXP_OPT_FILE_NAME, 'wb') as file:
-                #             pickle.dump(save_contracts, file)
-                #
-                #         for contract in self.core.contract_pool['EXP']:
-                #             contract.connect_core_space(self.core)
-                #
-                #         options_saved = True
-                #         tprint(f'{len(self.core.contract_pool['EXP'])} expired options saved to {self.core.EXP_OPT_FILE_NAME}.')
-                #
-                # except TypeError as e:
-                #     tprint(f'Error saving expired options to {self.core.EXP_OPT_FILE_NAME}. Try again in 10 secs...')
-                #     sleep(10)
+            self.dump_options_to_file(expired_list=True)
 
     def pipeline_sorter(self):
         """
@@ -293,29 +267,11 @@ class PipelineBuilder:
                         tprint(f'Expired options progress: {pct_done:.2f}%. Contracts done: {contracts_done:,}')
 
                         if datetime.today().weekday() in [5, 6]:
-                            self.dump_exp_options_to_file()
-                            # with open(self.core.EXP_OPT_FILE_NAME, 'wb') as file:
-                            #     while True:
-                            #         try:
-                            #             save_contracts = []
-                            #             for contract in self.core.contract_pool['EXP']:
-                            #                 contract.disconnect_core_space()
-                            #                 save_contracts.append(contract)
-                            #
-                            #             pickle.dump(save_contracts, file)
-                            #             tprint(f'{len(self.core.contract_pool['EXP'])} expired options saved to {self.core.EXP_OPT_FILE_NAME}.')
-                            #
-                            #             for contract in self.core.contract_pool['EXP']:
-                            #                 contract.connect_core_space(self.core)
-                            #
-                            #             break
-                            #         except RuntimeError as e:
-                            #             tprint(f'Failed to save expired options. Trying again in 10 seconds...')
-                            #             sleep(10)
+                            self.dump_options_to_file(expired_list=True)
 
                     if not self.core.contract_pool['EXP'] or len(self.core.contract_pool['EXP']) == 0:
-                        self.core.exp_last_update = datetime.now().timestamp()
-                        write_data_json(self.core, data= {'EXP_LAST_UPDATE': self.core.exp_last_update})
+                        self.core.exp_last_update = datetime.now()
+                        write_data_json(self.core, data={'EXP_LAST_UPDATE': self.core.exp_last_update})
 
                 elif len(self.core.contract_pool['STK'][self.stk_sorter_pointer:]) > 0:
                     self.db.check_table_exists(contract_container=self.core.contract_pool['STK'][self.stk_sorter_pointer], create_missing=True)
@@ -324,9 +280,9 @@ class PipelineBuilder:
                     self.stk_sorter_pointer += 1
 
                     if self.stk_sorter_pointer >= len(self.core.contract_pool['STK']):
-                        self.core.stk_last_update = datetime.now().timestamp()
+                        self.core.stk_last_update = datetime.now()
 
-                        write_data_json(self.core, data= {'STK_LAST_UPDATE': self.core.stk_last_update})
+                        write_data_json(self.core, data={'STK_LAST_UPDATE': self.core.stk_last_update})
 
                 elif self.core.contract_pool['OPT'] and len(self.core.contract_pool['OPT']) > 0:
                     self.db.check_table_exists(contract_container=self.core.contract_pool['OPT'][0], create_missing=True)
@@ -345,8 +301,11 @@ class PipelineBuilder:
                     else:
                         self.core.contract_pool['OPT'] = self.core.contract_pool['OPT'][1:] + [self.core.contract_pool['OPT'][0]]
 
-                if len(self.core.contract_pool["OPT"]) % 1000 == 0:
-                    tprint(f'Option pool remaining length: {len(self.core.contract_pool["OPT"])}')
+                    if len(self.core.contract_pool['OPT']) % 5000 == 0:
+                        tprint(f'Option pool remaining length: {len(self.core.contract_pool['OPT'])}')
+                        self.dump_options_to_file(main_list=True)
+                    elif len(self.core.contract_pool['OPT']) % 1000 == 0:
+                        tprint(f'Option pool remaining length: {len(self.core.contract_pool['OPT'])}')
 
                 sleep(.1)
 
@@ -366,34 +325,73 @@ class PipelineBuilder:
                 elif datetime.now() >= self.core.monday_roll_timer:
                     tprint('Monday roll timer triggered.')
                     self.core.contract_pool['EXP'] = []
-                    self.dump_exp_options_to_file()
+                    self.dump_options_to_file()
                     self.core.monday_roll_timer += timedelta(days=7)
 
-    def dump_exp_options_to_file(self):
+    def dump_options_to_file(self, main_list: bool = False, expired_list: bool = False):
         """
-        Dumps expired option files into a Pickle file.
+        Dumps option files into a Pickle file.
         File save process is wrapped into disconnecting and reconnecting of core space for each contract.
         Keeps looping until successfully finished.
 
         :input:     core variable space and instance variables
+                    main_list (optional): boolswitch to indicate if main option list to be dumped
+                    expired_list (optional): boolswitch to indicate if expired option list to be dumped
         :output:    :creating expired options Pickle dump file
         """
 
-        with open(self.core.EXP_OPT_FILE_NAME, 'wb') as file:
-            while True:
-                try:
-                    save_contracts = []
-                    for contract in self.core.contract_pool['EXP']:
-                        contract.disconnect_core_space()
-                        save_contracts.append(contract)
+        selection_list = []
+        if main_list:
+            selection_list.append(('main', self.core.MAIN_OPT_FILE_NAME, self.core.contract_pool['OPT']))
+        if expired_list:
+            selection_list.append(('expired', self.core.EXP_OPT_FILE_NAME, self.core.contract_pool['EXP']))
 
-                    pickle.dump(save_contracts, file)
-                    tprint(f'{len(self.core.contract_pool['EXP']):,} expired options saved to {self.core.EXP_OPT_FILE_NAME}.')
+        for type_name, file_name, contract_list in selection_list:
+            with open(file_name, 'wb') as file:
+                while True:
+                    try:
+                        save_contracts = []
+                        for contract in contract_list:
+                            contract.disconnect_core_space()
+                            save_contracts.append(contract)
 
-                    for contract in self.core.contract_pool['EXP']:
-                        contract.connect_core_space(self.core)
+                        pickle.dump(save_contracts, file)
+                        tprint(f'{len(contract_list):,} {type_name} options saved to {file_name}.')
 
-                    break
-                except RuntimeError:
-                    tprint(f'Failed to save expired options. Trying again in 10 seconds...')
-                    sleep(10)
+                        for contract in contract_list:
+                            contract.connect_core_space(self.core)
+
+                        break
+                    except RuntimeError:
+                        tprint(f'Failed to save {type_name} options. Trying again in 10 seconds...')
+                        sleep(10)
+
+    def load_options_from_file(self, main_list: bool = False, expired_list: bool = False):
+        """
+         Loads option files from a Pickle file.
+         After loading securities are reconnected to core space by each contract.
+
+         :input:     core variable space and instance variables
+                     main_list (optional): boolswitch to indicate if main option list to be dumped
+                     expired_list (optional): boolswitch to indicate if expired option list to be dumped
+         :output:    :fills selected option queue lists with previously created and saved security instances
+        """
+
+        selection_list = []
+        if main_list:
+            selection_list.append(('main', self.core.MAIN_OPT_FILE_NAME, 'OPT'))
+        if expired_list:
+            selection_list.append(('expired', self.core.EXP_OPT_FILE_NAME, 'EXP'))
+
+        for type_name, file_name, contract_list in selection_list:
+            with open(file_name, 'rb') as f:
+                contract_data = pickle.load(f)
+
+            tprint(f'{len(contract_data):,} {type_name} options loaded from {file_name}.')
+
+            for contract in contract_data:
+                contract.connect_core_space(self.core)
+
+            self.core.contract_pool[contract_list] = contract_data
+
+            tprint(f'{type_name.capitalize()} contracts loaded and reconnected to Core space.')
