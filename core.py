@@ -60,6 +60,7 @@ class Core:
     STARTGW_IBC_PATH: str = os.getenv('START_GW_PATH')
     IBC_TELNET_IP: str = os.getenv('IBC_TELNET_IP')
     IBC_TELNET_PORT: int = int(os.getenv('IBC_TELNET_PORT'))
+    GATEWAY_PROCESS_NAME: str = 'java.exe'
 
     # Further user defined settings
     IP_LENGTH: int = 10  # length for immediate_pool length. Queue between pipeline_builder and pipeline_handler
@@ -169,7 +170,7 @@ def tprint(text: str = '', *args, debug: bool = False, **kwargs):
 
 def kill_ibgateway(core: Core):
     tprint('Closing IBGateway...')
-    while {psutil.Process(x).name(): x for x in psutil.pids()}.get(core.IBC_PROCESS_NAME, None) is not None:
+    while {psutil.Process(x).name(): x for x in psutil.pids()}.get(core.GATEWAY_PROCESS_NAME, None) is not None:
         conn = Telnet()
         conn.connect(core.IBC_TELNET_IP, core.IBC_TELNET_PORT)
         conn.send('STOP\n')
@@ -183,7 +184,7 @@ def kill_ibgateway(core: Core):
 def start_ibgateway(core: Core):
     tprint(f'Starting IbGateway...')
 
-    while {psutil.Process(x).name(): x for x in psutil.pids()}.get(core.IBC_PROCESS_NAME, None) is None:
+    while {psutil.Process(x).name(): x for x in psutil.pids()}.get(core.GATEWAY_PROCESS_NAME, None) is None:
         if os.path.exists(core.STARTGW_IBC_PATH):
             os.system(core.STARTGW_IBC_PATH)
         else:
