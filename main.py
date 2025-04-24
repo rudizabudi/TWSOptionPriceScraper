@@ -9,6 +9,10 @@ from tws_api import TWSCon
 if __name__ == '__main__':
     def main():
         core: Core = Core()
+
+        if core.USE_IBC:
+            start_ibgateway(core)
+
         tws_con: TWSCon = TWSCon(core=core)
 
         while not core.tws_con:
@@ -34,9 +38,7 @@ if __name__ == '__main__':
                     tprint(f'TWS API might not send data any longer.')
                     if core.USE_IBC:
                         kill_ibgateway(core)
-                        sleep(30)
                         start_ibgateway(core)
-                        sleep(30)
             except TypeError:
                 pass
 
