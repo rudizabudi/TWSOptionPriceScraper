@@ -2,10 +2,12 @@ from ast import literal_eval
 from collections import defaultdict
 from datetime import datetime, timedelta, timezone
 from dotenv import load_dotenv
+from Exscript.protocols import Telnet
 import json
 import os
 import psutil
 import pytz
+from time import sleep
 from typing import Callable
 
 load_dotenv('.env')
@@ -56,7 +58,9 @@ class Core:
     # IBC settings for TWS API restart
     USE_IBC: bool = bool(os.getenv('USE_IBC'))
     STARTGW_IBC_PATH: str = os.getenv('START_GW_PATH')
-    IBC_PROCESS_NAME: str = 'java.exe'
+    IBC_TELNET_IP: str = os.getenv('IBC_TELNET_IP')
+    IBC_TELNET_PORT: int = int(os.getenv('IBC_TELNET_PORT'))
+    GATEWAY_PROCESS_NAME: str = 'java.exe'
 
     # Further user defined settings
     IP_LENGTH: int = 10  # length for immediate_pool length. Queue between pipeline_builder and pipeline_handler
@@ -165,28 +169,42 @@ def tprint(text: str = '', *args, debug: bool = False, **kwargs):
 
 
 def kill_ibgateway(core: Core):
-    tprint('Searching for PID.')
+    tprint('Closing IBGateway...')
+
     while True:
         try:
-            pids = {psutil.Process(x).name(): x for x in psutil.pids()}
+            while {psutil.Process(x).name(): x for x in psutil.pids()}.get(core.GATEWAY_PROCESS_NAME, None) is not None:
+                conn = Telnet()
+                conn.connect(core.IBC_TELNET_IP, core.IBC_TELNET_PORT)
+                conn.send('STOP\n')
+                conn.close()
+                sleep(10)
             break
-        except psutil.NoSuchProcess:
-            pass
 
-    if pid := pids.get(core.IBC_PROCESS_NAME):
-        psutil.Process(pid).kill()
-        tprint(f'IBGateway closed.')
-    else:
-        tprint('IBGateway process not found.')
+        except psutil.NoSuchProcess:
+            continue
+
+    tprint(f'IBGateway closed.')
 
 
 def start_ibgateway(core: Core):
-    if os.path.exists(core.STARTGW_IBC_PATH):
-        os.system(core.STARTGW_IBC_PATH)
-    else:
-        raise Exception(f'IBC not found. Provided path: {core.STARTGW_IBC_PATH}')
+    tprint(f'Starting IbGateway...')
 
-    tprint(f'IBGateway started.')
+    while True:
+        try:
+            if {psutil.Process(x).name(): x for x in psutil.pids()}.get(core.GATEWAY_PROCESS_NAME, None) is None:
+                if os.path.exists(core.STARTGW_IBC_PATH):
+                    os.system(core.STARTGW_IBC_PATH)
+                else:
+                    raise Exception(f'IBC not found. Provided path: {core.STARTGW_IBC_PATH}')
+
+            sleep(30)
+            if {psutil.Process(x).name(): x for x in psutil.pids()}.get(core.GATEWAY_PROCESS_NAME, None):
+                tprint(f'IBGateway started.')
+                break
+
+        except psutil.NoSuchProcess:
+            continue
 
 
 def read_data_json(core: Core) -> dict[str: str | float] | defaultdict:
