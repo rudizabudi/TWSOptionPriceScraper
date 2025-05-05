@@ -172,18 +172,24 @@ class PipelineHandler:
 
                 if iq_header and iq_rows:
                     if contract_instance.get_secType() == 'OPT':
-                        tprint(f'Writing {len(iq_rows):>5} new price data points for {contract_instance.get_symbol()} {contract_instance.get_secType()} to database {contract_instance.get_table()} {contract_instance.get_right()} {contract_instance.get_strike()}.')
+                        contract = f'{contract_instance.get_symbol()} {contract_instance.get_secType()}'
+                        database = f'{contract_instance.get_table()} {contract_instance.get_right()} {contract_instance.get_strike()}'
+                        tprint(f'Writing {len(iq_rows):>5} new price data points for {contract:>10}{' ':>3} to database {database:>30}.')
                     else:
-                        tprint(f'Writing {len(iq_rows):>5} new price data points for {contract_instance.get_symbol()} {contract_instance.get_secType()} to database {contract_instance.get_table()}.')
+                        contract = f'{contract_instance.get_symbol()} {contract_instance.get_secType()}'
+                        tprint(f'Writing {len(iq_rows):>5} new price data points for {contract:>10}{' ':>3} to database {contract_instance.get_table():>30}.')
 
                     for i in range(ceil(len(iq_rows) / self.core.INSERT_QUERY_MAX_LINES)):
                         insert_query = iq_header + ','.join(str(x) for x in iq_rows[i * self.core.INSERT_QUERY_MAX_LINES:min(len(iq_rows), (i + 1) * self.core.INSERT_QUERY_MAX_LINES)]) + ';'
                         self.db.write_price_data(query_string=insert_query)
                 else:
                     if contract_instance.get_secType() == 'OPT':
-                        tprint(f'Writing no new price data points for {contract_instance.get_symbol()} {contract_instance.get_secType()} to database {contract_instance.get_table()} {contract_instance.get_right()} {contract_instance.get_strike()}.')
+                        contract = f'{contract_instance.get_symbol()} {contract_instance.get_secType()}'
+                        database = f'{contract_instance.get_table()} {contract_instance.get_right()} {contract_instance.get_strike()}'
+                        tprint(f'Writing {'no':>5} new price data points for {contract:>10}{' ':>3} to database {database:>30}.')
                     else:
-                        tprint(f'Writing no new price data points for {contract_instance.get_symbol()} {contract_instance.get_secType()} to database {contract_instance.get_table()}.')
+                        contract = f'{contract_instance.get_symbol()} {contract_instance.get_secType()}'
+                        tprint(f'Writing {'no':>5} new price data points for {contract:>10}{' ':>3} to database {contract_instance.get_table():>30}.')
 
                 self.core.writable_pool.pop(0)
 
