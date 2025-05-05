@@ -68,7 +68,7 @@ class PipelineBuilder:
         current_time = datetime.now().time()
         last_scheduled_update = self.core.exp_update_timer - timedelta(days=1)
         if current_time < self.core.exp_update_timer.time() and self.core.exp_last_update < last_scheduled_update:
-            #self.get_exp_options()
+            self.get_exp_options()
             pass
 
         # elif datetime.today().weekday() in [5, 6]:
@@ -116,7 +116,7 @@ class PipelineBuilder:
                     sleep(.1)
                     pass
 
-        #self.stk_sorter_pointer = len(self.core.contract_pool['STK'])
+        self.stk_sorter_pointer = len(self.core.contract_pool['STK'])
 
         tprint('Building stock contracts ended.')
 
@@ -175,7 +175,8 @@ class PipelineBuilder:
             workday_cond = (datetime.today() - datetime.fromtimestamp(m_time)) <= timedelta(hours=18) and datetime.fromtimestamp(m_time).weekday() not in [4, 5, 6]
             if weekend_cond or workday_cond:
                 self.load_options_from_file(expired_list=True)
-
+                exp_options_loaded = True
+                
         except (FileNotFoundError, EOFError):
             pass
 
@@ -245,9 +246,12 @@ class PipelineBuilder:
                     :removing from self.core.contract_pool['STK' | 'EXP' | 'OPT']
         """
 
+        while (not self.core.contract_pool['STK'] and not self.core.contract_pool['OPT'] and not self.core.contract_pool['EXP']) or self.core.startup:
+            sleep(1)
+
         while True:
-            while (not self.core.contract_pool['STK'] and not self.core.contract_pool['OPT'] and not self.core.contract_pool['EXP']) or self.core.startup:
-                sleep(1)
+            while len(self.core.immediate_pool) == self.core.IP_LENGTH:
+                sleep(0.1)
 
             while len(self.core.immediate_pool) < self.core.IP_LENGTH:
                 tprint(f'Primal pool lengths: {len(self.core.contract_pool["STK"]), self.stk_sorter_pointer, len(self.core.contract_pool["OPT"]), len(self.core.contract_pool["EXP"]), len(self.core.immediate_pool)}', debug=True)
@@ -310,7 +314,7 @@ class PipelineBuilder:
                 sleep(.1)
 
             if datetime.now().weekday() not in self.core.TIMER_EXCLUDE_DAYS:
-                if datetime.now() >= self.core.stk_update_timer:
+                if datetime.now() >= self.core.stk_update_timer > self.core.stk_last_update:
                     tprint('Stk update timer triggered.')
                     #self.build_stk_contracts()
 
@@ -325,7 +329,7 @@ class PipelineBuilder:
                 elif datetime.now() >= self.core.monday_roll_timer:
                     tprint('Monday roll timer triggered.')
                     self.core.contract_pool['EXP'] = []
-                    self.dump_options_to_file()
+                    self.dump_options_to_file(expired_list=True)
                     self.core.monday_roll_timer += timedelta(days=7)
 
     def dump_options_to_file(self, main_list: bool = False, expired_list: bool = False):
