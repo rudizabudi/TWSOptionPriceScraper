@@ -156,7 +156,7 @@ class PipelineBuilder:
 
         return opt_contracts
 
-    def get_exp_options(self):
+    def get_exp_options(self, force_update: bool = False):
         """
         Retrieves expired option contracts from the database and updates the contract pool.
 
@@ -176,11 +176,11 @@ class PipelineBuilder:
             if weekend_cond or workday_cond:
                 self.load_options_from_file(expired_list=True)
                 exp_options_loaded = True
-                
+
         except (FileNotFoundError, EOFError):
             pass
 
-        if not exp_options_loaded:
+        if not exp_options_loaded or force_update:
             tprint('Getting expired option contracts...')
             start = 0 if datetime.now().time() > time(22, 00) else 1
             expiries = [datetime.today().date() - timedelta(days=x) for x in range(start, self.core.EXPIRED_OPT_DAYS + 1)]
@@ -322,7 +322,7 @@ class PipelineBuilder:
                     self.stk_sorter_pointer = 0
                 elif datetime.now() >= self.core.exp_update_timer:
                     tprint('Exp update timer triggered.')
-                    self.get_exp_options()
+                    self.get_exp_options(force_update=True)
                     self.option_exp_max_length = len(self.core.contract_pool['EXP'])
 
                     self.core.exp_update_timer += timedelta(days=1)
