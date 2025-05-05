@@ -46,6 +46,9 @@ class PipelineHandler:
         tprint('Requesting prices...')
         while True:
             try:
+                while len(self.core.immediate_pool) == 0:
+                    sleep(0.1)
+
                 contract_instance = self.core.immediate_pool[0]
                 last_update = contract_instance.get_last_update()
                 last_update = last_update if last_update else datetime(year=datetime.today().year - 2, month=1, day=1)
@@ -86,8 +89,8 @@ class PipelineHandler:
                 while not contract_instance.get_error_flag() and not contract_instance.get_historical_data_end() and datetime.now() < time_breaker:
                     if not self.core.tws_con.isConnected():
                         while not self.tws_con.isConnected():
-                            #self.tws_con = self.core.tws_con
                             sleep(10)
+                            self.tws_con = self.core.tws_con
                         break
                     sleep(.1)
 
@@ -118,6 +121,9 @@ class PipelineHandler:
 
         while True:
             try:
+                while len(self.core.writable_pool) == 0:
+                    sleep(0.1)
+
                 contract_instance = self.core.writable_pool[0]
                 
                 existing_dates = self.db.get_existing_dates(contract_container=contract_instance)
@@ -149,33 +155,9 @@ class PipelineHandler:
                     timestamp += timedelta(hours=time_offset)
                     requested_pricing[timestamp] = ohlc
 
-
-                # tprint(f'Total requested rows: {len(requested_pricing)}')
-                # tprint(f'Total present rows: {len(existing_dates)}')
-                # counter = 0
-                # for dt in requested_pricing.keys():
-                #     if dt not in existing_dates:
-                #         counter += 1
-                #
-                # tprint(f'Total new rows: {counter}')
-
                 iq_rows = []
                 for i, (dt, ohlc) in enumerate(requested_pricing.items(), start=1):
                     if not existing_dates or dt not in existing_dates:
-
-                # iq_rows = []
-                # for i, (dt, ohlc) in enumerate(contract_instance.get_price_data().items(), start=1):
-                #     dt_dt = datetime.strptime(dt, '%Y%m%d %H:%M:%S')
-                #     if not existing_dates or dt_dt not in existing_dates:
-                #         if (dt_dt.year, dt_dt.month, dt_dt.day) not in self.core.utc_diffs.keys():
-                #             new_start_range = datetime.today() - datetime(dt_dt.year, dt_dt.month, dt_dt.day)
-                #             self.core.create_time_offset_table(start_range=-1 * (new_start_range.days + 30))
-                #
-                #         time_offset = self.core.NORMALIZED_TIME_DIFF + self.core.utc_diffs[dt_dt.year, dt_dt.month, dt_dt.day]
-                #
-                #         dt_dt += timedelta(hours=time_offset)
-                #         dt = dt_dt.strftime('%Y%m%d %H:%M:%S')
-
                         match contract_instance.get_secType():
                             case 'STK':
                                 data_query = f"('{dt}', {ohlc['High']}, {ohlc['Low']}, {ohlc['Open']}, {ohlc['Close']})"
@@ -208,3 +190,6 @@ class PipelineHandler:
             except IndexError:
                 while len(self.core.writable_pool) == 0:
                     sleep(.1)
+
+            except Exception as e:
+                raise Exception(f'Unhandled exception {e}.')
