@@ -97,7 +97,7 @@ class Core:
 
     stk_update_timer: datetime = datetime.today().replace(hour=STK_UPDATE_TIME[0], minute=STK_UPDATE_TIME[1], second=0, microsecond=0)
     exp_update_timer: datetime = datetime.today().replace(hour=EXP_UPDATE_TIME[0], minute=EXP_UPDATE_TIME[1], second=0, microsecond=0)
-    monday_roll_timer: datetime = next(filter(lambda x: x.weekday() == 0, ((datetime.today() + timedelta(days=x + 1) for x in range(0, 7))))).replace(hour=6, minute=0)
+    monday_roll_timer: datetime = next(filter(lambda x: x.weekday() == 0, ((datetime.today() + timedelta(days=x + 1) for x in range(0, 7))))).replace(hour=1, minute=0)
 
     startup: bool = True
     tws_con: 'TWSCon' = None
@@ -151,8 +151,13 @@ class Core:
 
         if not isinstance(self.USE_IBC, bool):
             raise ValueError(f'Invalid value for USE_IBC: {self.USE_IBC}')
-        if not isinstance(self.STARTGW_IBC_PATH, str):
-            raise ValueError(f'Invalid value for START_GW_PATH: {self.STARTGW_IBC_PATH}')
+        if self.USE_IBC:
+            if not isinstance(self.STARTGW_IBC_PATH, str):
+                raise ValueError(f'Invalid value for START_GW_PATH: {self.STARTGW_IBC_PATH}')
+            if not isinstance(self.IBC_TELNET_IP, str):
+                raise ValueError(f'Invalid value for IBC_TELNET_IP: {self.IBC_TELNET_IP}')
+            if not isinstance(self.IBC_TELNET_PORT, int):
+                raise ValueError(f'Invalid value for IBC_TELNET_PORT: {self.IBC_TELNET_PORT}')
 
     def create_time_offset_table(self, start_range: int = -30, end_range: int = 365):
         for day_dif in range(start_range, end_range):
@@ -180,7 +185,8 @@ def kill_ibgateway(core: Core):
                 conn.close()
                 sleep(10)
             break
-
+        except OSError:
+            break
         except psutil.NoSuchProcess:
             continue
 
