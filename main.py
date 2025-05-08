@@ -1,4 +1,5 @@
 from datetime import timedelta
+import os
 from time import sleep
 
 from core import Core, tprint, kill_ibgateway, start_ibgateway
@@ -8,6 +9,7 @@ from tws_api import TWSCon
 
 if __name__ == '__main__':
     def main():
+
         core: Core = Core()
 
         if core.USE_IBC:
@@ -55,11 +57,11 @@ TODO: Make constituents check and option_list_creation (-> new SQL tables) perio
 TODO: Containerize anew
 TODO: Add manual sql_maintenance.py maintenance functions to controller loop
 TODO: Split exp_option date logic into creation and finish. 
-TODO: Find a cleaner way to close IBC instead of killing JVM instance
 
 
 DONE: Adapt local time conditions to UTC. Make TZ aware
 DONE: Add TWS Gateway restart in main.py loop if it's not responding/glitching
 DONE: Rebuild constituents loader.
 DONE: .env input validation
+DONE: Find a cleaner way to close IBC instead of killing JVM instance
 """
