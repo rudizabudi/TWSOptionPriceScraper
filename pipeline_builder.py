@@ -316,7 +316,7 @@ class PipelineBuilder:
             if datetime.now().weekday() not in self.core.TIMER_EXCLUDE_DAYS:
                 if datetime.now() >= self.core.stk_update_timer > self.core.stk_last_update:
                     tprint('Stk update timer triggered.')
-                    self.build_stk_contracts()
+                    #self.build_stk_contracts()
 
                     self.core.stk_update_timer += timedelta(days=1)
                     self.stk_sorter_pointer = 0
