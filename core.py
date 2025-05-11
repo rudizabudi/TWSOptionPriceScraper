@@ -104,6 +104,7 @@ class Core:
 
     last_request: datetime = None
     last_receive: datetime = None
+    last_connection: datetime = None
 
     time_disconnect: datetime = None
 

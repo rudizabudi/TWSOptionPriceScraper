@@ -28,6 +28,7 @@ class TWSCon(EWrapper, EClient):
     def connectAck(self):
         if self.connection_status.name == 'DISCONNECTED':
             self.connection_status = ConnectionStatus.CONNECTED
+            self.core.last_connection = datetime.now()
             tprint(f'Connected to TWS API.')
 
     def connectionClosed(self):

@@ -1,4 +1,4 @@
-from datetime import timedelta
+from datetime import datetime, timedelta
 import os
 from time import sleep
 
@@ -35,7 +35,7 @@ if __name__ == '__main__':
                 sleep(10)
 
             try:
-                if core.last_request - core.last_receive > timedelta(seconds=core.GLITCH_DETECTOR_THRESHOLD):
+                if min(core.last_request - core.last_receive, datetime.now() - core.last_connection) > timedelta(seconds=core.GLITCH_DETECTOR_THRESHOLD):
                     tprint(f'TWS API might not send data any longer.')
                     if core.USE_IBC:
                         kill_ibgateway(core)
