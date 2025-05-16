@@ -32,6 +32,7 @@ class EnvDistributor:
         return cls.core
 
 
+
 class Core:
     #  General Settings:
     CANDLE_LENGTH: str = os.getenv('CANDLE_LENGTH')
@@ -87,11 +88,14 @@ class Core:
 
     underlying_list: dict[str, list[str]] = {'STK': []}
 
-    contract_pool: dict[str, list['ContractContainer']] = {'STK': [], 'OPT': [], 'EXP': []}
+    contract_pool: dict[str, list['ContractContainer']] = {'STK': [], 'OPT': defaultdict(list), 'EXP': []}
 
     immediate_pool: list['ContractContainer'] = []
 
     writable_pool: list['ContractContainer'] = []
+
+    #contract pool options distribution
+    regression_factor: float = 0.2
 
     timeout_breaker: dict[int: int] = {4: 20, 8: 40, 26: 120, 52: 180, 9999: 300}
 
@@ -117,6 +121,8 @@ class Core:
         self.validate_env_input()
 
         self.create_time_offset_table()
+
+        self.probability_table = self.create_probability_table(self.regression_factor)
 
         # Pipeline time triggers
         self.stk_last_update: datetime = datetime.fromtimestamp(read_data_json(self).get('STK_LAST_UPDATE', 0))
@@ -161,12 +167,42 @@ class Core:
                 raise ValueError(f'Invalid value for IBC_TELNET_PORT: {self.IBC_TELNET_PORT}')
 
     def create_time_offset_table(self, start_range: int = -30, end_range: int = 365):
+        """
+        :input:     :param start_range: No. of days in the past from today to start table at
+                    :param end_range: No. of days in the future from today to end table at
+        :output:    :creating dict[int, int, int] = hour offset to utc to normalize data for given date
+        """
         for day_dif in range(start_range, end_range):
             date = datetime.now(timezone.utc) + timedelta(days=day_dif)
 
             local_time = date.astimezone(pytz.timezone(self.LOCAL_TZ))
             trade_time = date.astimezone(pytz.timezone(self.EXCHANGE_TZ))
             self.utc_diffs[date.year, date.month, date.day] = (trade_time.utcoffset() - local_time.utcoffset()).total_seconds() / 60 / 60
+
+    @staticmethod
+    def create_probability_table(regression_factor: float) -> dict[int, float]:
+        """
+        Creates a probability table for the regression factor.
+        Normalizes the values to a sum of 100% (1).
+        Makes dict keys progressive aka. the sum of accumulated probabilities for easy evaluation of given data against it.
+        :input:     :param regression_factor: Percental regression between each probability step. Decimal notation.
+        :output:    :return dict[int, float]: Keys as corresponding int keys in contract_pool['OPT'] and values as accumulates probabilities
+        """
+        value = 100
+        probabilities = {}
+
+        for i in range(1, 10):
+            probabilities[i] = value
+            value = value * (1 - regression_factor)
+
+        prob_sum = sum(probabilities.values())
+        cum_prob = 0
+        for k in probabilities.keys():
+            prob = probabilities[k] / prob_sum
+            cum_prob += prob
+            probabilities[k] = round(cum_prob, 2)
+
+        return probabilities
 
 
 def tprint(text: str = '', *args, debug: bool = False, **kwargs):
