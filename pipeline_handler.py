@@ -40,6 +40,7 @@ class PipelineHandler:
         # print("Request_prices called from:")
         # for line in traceback.format_stack()[:-1]:
         #     print(line.strip())
+
         while not self.core.immediate_pool:
             sleep(10)
 

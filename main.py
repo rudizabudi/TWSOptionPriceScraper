@@ -56,7 +56,8 @@ TODO: Switch from threading to Python3.13 open GIL
 TODO: Make constituents check and option_list_creation (-> new SQL tables) periodical
 TODO: Containerize anew
 TODO: Add manual sql_maintenance.py maintenance functions to controller loop
-TODO: Split exp_option date logic into creation and finish. 
+TODO: Split exp_option date logic(trigger handling?) into creation and finish.
+TODO: Migrate .env config to a handier .json 
 
 
 DONE: Adapt local time conditions to UTC. Make TZ aware
