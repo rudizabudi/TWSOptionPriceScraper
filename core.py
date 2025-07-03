@@ -69,7 +69,7 @@ class Core:
     INSERT_QUERY_MAX_LINES: int = 995  # max amount of inserts per query
     GLITCH_DETECTOR_THRESHOLD: int = 900  # threshold in seconds after which tws_api glitching is assumed
     EXPIRED_OPT_DAYS: int = 2  # threshold in days after that an option is considered expired (inclusive)
-    OPT_LIST_CURRENT: int = 7  # days after which creation the option list is considered current
+    OPT_LIST_CURRENT: int = 5  # days after which creation the option list is considered current
 
     LOCAL_TZ: str = 'Europe/Berlin'  # name of local timezone
     EXCHANGE_TZ: str = 'America/New_York'  # name of exchange timezone
@@ -80,6 +80,8 @@ class Core:
     MAIN_OPT_FILE_NAME: str = 'main_option_contracts.pkl'
     EXP_OPT_FILE_NAME: str = 'expired_option_contracts.pkl'
     JSON_SESSION_FILE_NAME: str = 'session_data.json'
+
+    FORCE_EXP_UPDATE: bool = False  # force update of expired options on startup
 
     # Initialization of shared variable space.
     reqId_hashmap: dict[int: Callable] = {}
@@ -262,7 +264,7 @@ def read_data_json(core: Core) -> dict[str: str | float] | defaultdict:
 def write_data_json(core, data: dict = None):
     if not isinstance(data, dict):
         raise TypeError('Json data must be a dictionary.')
-    tprint(f'Write this to json: {data}')
+    tprint(f'Write this to json: {data}', debug=True)
     loaded_data = read_data_json(core)
     for k, v in data.items():
         if isinstance(v, datetime):

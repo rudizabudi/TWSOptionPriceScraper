@@ -72,7 +72,7 @@ class PipelineBuilder:
 
         current_time = datetime.now().time()
         last_scheduled_update = self.core.exp_update_timer - timedelta(days=1)
-        if current_time < self.core.exp_update_timer.time() and self.core.exp_last_update < last_scheduled_update:
+        if (current_time < self.core.exp_update_timer.time() and self.core.exp_last_update < last_scheduled_update) or self.core.FORCE_EXP_UPDATE:
             self.get_exp_options()
 
         # elif datetime.today().weekday() in [5, 6]:
@@ -290,12 +290,14 @@ class PipelineBuilder:
                 tprint(f'Primal pool lengths: {len(self.core.contract_pool["STK"]), self.stk_sorter_pointer, sum(len(x) for x in self.core.contract_pool['OPT'].values()), len(self.core.contract_pool['EXP']), len(self.core.immediate_pool)}', debug=True)
 
                 if len(self.core.contract_pool['EXP']) > 0:
+                    tprint(f'EXP Option condition met.', debug=True)
                     last_update = self.db.get_last_update(contract_container=self.core.contract_pool['EXP'][0], response=True)
                     expiry = self.core.contract_pool['EXP'][0].get_expiry(dt_object=True)
 
                     if (last_update and last_update < expiry + timedelta(hours=21, minutes=45)) or not last_update:
                         self.db.check_table_exists(contract_container=self.core.contract_pool['EXP'][0], create_missing=True)
                         self.core.immediate_pool.append(self.core.contract_pool['EXP'].pop(0))
+                        tprint(f'EXP Option added to immediate pool.', debug=True)
 
                         if len(self.core.contract_pool['EXP']) > 0 and len(self.core.contract_pool['EXP']) % 1000 == 0:
                             pct_done = ((self.option_exp_max_length - len(self.core.contract_pool['EXP'])) / self.option_exp_max_length) * 100
@@ -307,7 +309,6 @@ class PipelineBuilder:
 
                         if not self.core.contract_pool['EXP'] or len(self.core.contract_pool['EXP']) == 0:
                             self.core.exp_last_update = datetime.now()
-                            print(123, self.core.contract_pool['EXP'], not self.core.contract_pool['EXP'], len(self.core.contract_pool['EXP']))
                             write_data_json(self.core, data={'EXP_LAST_UPDATE': self.core.exp_last_update})
 
                     else:
@@ -315,6 +316,8 @@ class PipelineBuilder:
                         continue
 
                 elif len(self.core.contract_pool['STK'][self.stk_sorter_pointer:]) > 0:
+                    tprint(f'STK condition met.', debug=True)
+
                     self.db.check_table_exists(contract_container=self.core.contract_pool['STK'][self.stk_sorter_pointer], create_missing=True)
                     self.core.immediate_pool.append(self.core.contract_pool['STK'][self.stk_sorter_pointer])
                     #self.core.immediate_pool.append(self.core.contract_pool['STK'].pop(0))
@@ -326,6 +329,7 @@ class PipelineBuilder:
                         write_data_json(self.core, data={'STK_LAST_UPDATE': self.core.stk_last_update})
 
                 elif self.core.contract_pool['OPT'] and sum(len(x) for x in self.core.contract_pool['OPT'].values()) > 0:
+                    tprint(f'OPT option condition 1 met.', debug=True)
                     rand_choice = randint(0, 100) / 100
                     for k, v in self.core.probability_table.items():
                         if rand_choice <= v:
@@ -337,37 +341,40 @@ class PipelineBuilder:
                     expiry = self.core.contract_pool['OPT'][rand_key][0].get_expiry(dt_object=True)
 
                     if expiry > datetime.now():
+                        tprint(f'OPT option condition 2 met.', debug=True)
                         if last_update and not (datetime.now() - last_update) < max(0.5 * (expiry - datetime.now()), timedelta(days=30)):
                             self.core.immediate_pool.append(self.core.contract_pool['OPT'][rand_key].pop(0))
+                            tprint(f'OPT Option added to immediate pool 1.', debug=True)
                         elif last_update and last_update < expiry + timedelta(hours=21, minutes=45):
                             self.core.contract_pool['OPT'][rand_key].pop(0)
+                            tprint(f'EXP Option withdrawn.', debug=True)
                         elif not last_update:
                             self.core.immediate_pool.append(self.core.contract_pool['OPT'][rand_key].pop(0))
+                            tprint(f'OPT Option added to immediate pool 2.', debug=True)
                         else:
                             print('Ever triggered?')
                             #self.core.contract_pool['OPT'][rand_key].pop(0) = self.core.contract_pool['OPT'][1:].append(self.core.contract_pool['OPT'][0])
-                    # else:
-                    #     print('Expired option', expiry)
-                    #     self.core.contract_pool['EXP'].append(self.core.contract_pool['OPT'][rand_key].pop(0))
+                    else:
+                            tprint(f'Expired option {expiry}', debug=True)
+                            self.core.contract_pool['OPT'][rand_key].pop(0)
+                            #self.core.contract_pool['EXP'].append(self.core.contract_pool['OPT'][rand_key].pop(0))
 
                     remaining_length = sum(len(x) for x in self.core.contract_pool['OPT'].values())
                     if remaining_length % 5000 == 0:
-                        tprint(f'Option pool remaining length: {remaining_length}')
+                        tprint(f'Option pool remaining length: {remaining_length:,}')
                         self.dump_options_to_file(main_list=True)
                     elif remaining_length % 1000 == 0:
-                        tprint(f'Option pool remaining length: {remaining_length}')
+                        tprint(f'Option pool remaining length: {remaining_length:,}')
 
                 sleep(.1)
 
             if datetime.now().weekday() not in self.core.TIMER_EXCLUDE_DAYS:
                 if datetime.now() >= self.core.stk_update_timer > self.core.stk_last_update:
-                    tprint('Stk update timer triggered.')
-                    #self.build_stk_contracts()
-
+                    tprint('STK update timer triggered.')
                     self.core.stk_update_timer += timedelta(days=1)
                     self.stk_sorter_pointer = 0
                 elif datetime.now() >= self.core.exp_update_timer:
-                    tprint('Exp update timer triggered.')
+                    tprint('EXP update timer triggered.')
                     self.get_exp_options(force_update=True)
                     self.option_exp_max_length = len(self.core.contract_pool['EXP'])
 
@@ -452,16 +459,20 @@ class PipelineBuilder:
             with open(file_name, 'rb') as f:
                 contract_data = pickle.load(f)
 
-            tprint(f'{len(contract_data):,} {type_name} options loaded from {file_name}.')
             match type_name:
                 case 'expired':
+                    tprint(f'{len(contract_data):,} {type_name} options loaded from {file_name}.')
+
                     for contract in contract_data:
                         contract.connect_core_space(self.core)
 
                     self.core.contract_pool[contract_list] = contract_data
 
                     tprint(f'{type_name.capitalize()} contracts loaded and reconnected to Core space.')
+
                 case 'main':
+                    tprint(f'{sum(len(x) for x in contract_data.values()):,} {type_name} options loaded from {file_name}.')
+
                     for k, sublist in contract_data.items():
                         for contract in sublist:
                             contract.connect_core_space(self.core)
