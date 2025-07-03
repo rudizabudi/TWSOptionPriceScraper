@@ -61,7 +61,10 @@ class TWSCon(EWrapper, EClient):
 
                 if self.isConnected():
                     #self.core.connection_status = ConnectionStatus.CONNECTED
-                    break
+                    break      
+                else:
+                    self.disconnect() 
+                    self.t.join(timeout=5)
 
             except AttributeError as e:
                 tprint(f'Attribute error: {e}', debug=True)
