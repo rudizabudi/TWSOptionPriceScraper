@@ -1,0 +1,46 @@
+{
+    "profiles": {
+        "live_account": {
+            "api_host_ip": "127.0.0.1",
+            "api_port": 7498,
+            "api_client_id": 1250,
+            "ibkr_account_id": "U10679XYZ"
+        }
+    },
+    "settings": {
+        "sql_credentials": {
+            "sql_server": "IP\\SQL-Server-Name",
+            "sql_user": "usr",
+            "sql_password": "pwd"
+        },
+        "general": {
+            "grace_period": 14,
+            "candle_length": "15 mins",
+            "randomize_opts": true,
+            "stk_update_time": [18, 0],
+            "exp_update_time": [22, 30],
+            "update_csv_path": "https://raw.githubusercontent.com/datasets/s-and-p-500-companies/main/data/constituents.csv"
+          },
+        "ibc": {
+            "use_ibc": true,
+            "start_gw_path": "C:\\IBC\\StartGateway.bat",
+            "telnet_ip": "127.0.0.1",
+            "telnet_port": 7462
+        },
+        "extra_symbols": {
+            "spot": [
+                "USO",
+                "SPY",
+                "QQQ",
+                "IWM",
+                "GLD",
+                "TLT",
+                "IEF",
+                "LQD"
+            ],
+            "futures": [
+                "VIX"
+            ]
+        }
+    }
+}

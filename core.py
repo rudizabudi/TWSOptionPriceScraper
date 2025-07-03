@@ -1,7 +1,6 @@
 from ast import literal_eval
 from collections import defaultdict
 from datetime import datetime, timedelta, timezone
-from dotenv import load_dotenv
 from Exscript.protocols import Telnet
 import json
 import os
@@ -9,8 +8,6 @@ import psutil
 import pytz
 from time import sleep
 from typing import Callable
-
-load_dotenv('.env')
 
 DEBUG_MODE: bool = False
 
@@ -32,35 +29,50 @@ class EnvDistributor:
         return cls.core
 
 
-
 class Core:
+
+    if os.getenv('DEV_VAR') == 'rudizabudi':
+        json_file = 'config_dev.json'
+    else:
+        json_file = 'config.json'
+
+    if not os.path.exists(json_file):
+        raise Exception('config file not found.')
+
+    with open(json_file, 'r') as f:
+        data = json.load(f)
+
+    #TODO: ADD PROFILE SELECTION
+    _profile = 'live_account'
+
     #  General Settings:
-    CANDLE_LENGTH: str = os.getenv('CANDLE_LENGTH')
-    RANDOMIZE_OPTS: bool = literal_eval(os.getenv('RANDOMIZE_OPTS'))
-    STK_UPDATE_TIME: list[int] = literal_eval(os.getenv('STK_UPDATE_TIME'))  # list[hour, minute]
-    EXP_UPDATE_TIME: list[int] = literal_eval(os.getenv('EXP_UPDATE_TIME'))  # list[hour, minute]
+    CANDLE_LENGTH: str = data['settings']['candle_length']  # '1 secs', '5 secs', '10 secs', '15 secs', '30 secs', '1 min', '2 mins', '3 mins', '5 mins', '10 mins', '15 mins', '20 mins', '30 mins', '1 hour', '2 hours', '3 hours', '4 hours', '8 hours', '1 day', '1W', '1M'
+    RANDOMIZE_OPTS: bool = data['settings']['randomize_opts']
+    STK_UPDATE_TIME: list[int] = data['settings']['stk_update_time']  # list[hour, minute]
+    EXP_UPDATE_TIME: list[int] = data['settings']['exp_update_time'] # list[hour, minute]
 
     # Constituents list updater
-    GRACE_PERIOD: int = int(os.getenv('GRACE_PERIOD'))  # grace period in days after STK left index
-    UPDATE_CSV_PATH: str = os.getenv('UPDATE_CSV_PATH')
-    EXTRA_SYMBOLS: list[str] = os.getenv('EXTRA_SYMBOLS').split(',')
+    GRACE_PERIOD: int = data['settings']['grace_period']
+    UPDATE_CSV_PATH: str = data['settings']['update_csv_path']
+    EXTRA_SPOT_SYMBOLS: list[str] = data['extra_symbols']['spot']
+    EXTRA_FUTURE_SYMBOLS: list[str] = data['extra_symbols']['futures']
 
     # TWS API credentials
-    HOST_IP: str = os.getenv('HOST_IP')
-    API_PORT: int = int(os.getenv('API_PORT'))
-    CLIENT_ID: int = int(os.getenv('CLIENT_ID'))
+    HOST_IP: str = data['settings']['profiles'][_profile]['api_host_ip']
+    API_Port: int = data['settings']['profiles'][_profile]['api_port']
+    CLIENT_ID: int = data['settings']['profiles'][_profile]['api_client_id']
 
     # Microsoft SQL Server credentials
-    SQL_SERVER: str = os.getenv('SQL_SERVER')
-    SQL_USER: str = os.getenv('SQL_USER')
-    SQL_PASSWORD: str = os.getenv('SQL_PASSWORD')
+    SQL_SERVER: str = data['settings']['sql_credentials']['sql_server']
+    SQL_USER: str = data['settings']['sql_credentials']['sql_user']
+    SQL_PASSWORD: str = data['settings']['sql_credentials']['sql_password']
     SQL_CONNECTION_STRING: str = f'DRIVER={{ODBC Driver 17 for SQL Server}};SERVER={SQL_SERVER};UID={SQL_USER};PWD={SQL_PASSWORD}'
 
     # IBC settings for TWS API restart
-    USE_IBC: bool = bool(os.getenv('USE_IBC'))
-    STARTGW_IBC_PATH: str = os.getenv('START_GW_PATH')
-    IBC_TELNET_IP: str = os.getenv('IBC_TELNET_IP')
-    IBC_TELNET_PORT: int = int(os.getenv('IBC_TELNET_PORT'))
+    USE_IBC: bool = data['settings']['ibc']['use_ibc']
+    STARTGW_IBC_PATH: str = data['settings']['ibc']['start_gw_path']
+    IBC_TELNET_IP: str = data['settings']['ibc']['telnet_ip']
+    IBC_TELNET_PORT: int = data['settings']['ibc']['telnet_port']
     GATEWAY_PROCESS_NAME: str = 'java.exe'
 
     # Further user defined settings
@@ -117,10 +129,8 @@ class Core:
     utc_diffs: dict[tuple[int]: int] = {}
 
     def __init__(self):
-        if not os.path.exists(os.path.join(os.path.dirname(__file__), '.env')):
-            raise Exception('.env file not found. Please fill and rename .env_rename')
 
-        self.validate_env_input()
+        self.validate_input()
 
         self.create_time_offset_table()
 
@@ -133,7 +143,7 @@ class Core:
 
         EnvDistributor.set_core(self)
 
-    def validate_env_input(self):
+    def validate_input(self):
         if self.CANDLE_LENGTH not in ('1 secs', '5 secs', '10 secs', '15 secs', '30 secs', '1 min', '2 mins', '3 mins', '5 mins', '10 mins', '15 mins', '20 mins', '30 mins', '1 hour', '2 hours', '3 hours', '4 hours', '8 hours', '1 day', '1W', '1M'):
             raise ValueError(f'Illegal candle length: {self.CANDLE_LENGTH}')
         if not isinstance(self.RANDOMIZE_OPTS, bool):
