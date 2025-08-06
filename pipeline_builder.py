@@ -161,7 +161,10 @@ class PipelineBuilder:
             return opt_contracts
 
         sorted_contracts = {}
-        current_stk_price = stk.get_last_price()
+        self.db.check_table_exists(contract_container=stk)
+        if not (current_stk_price := stk.get_last_price()):
+            current_stk_price = 10
+
         for opt_contract in opt_contracts:
             date_dif = opt_contract.get_expiry(dt_object=True) - datetime.today()
             date_dif = date_dif.days if date_dif.days > 0 else 0
