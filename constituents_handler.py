@@ -90,7 +90,7 @@ def load_constituents(core):
     scraper_input_list = cursor.fetchall()
 
     temp_underlying_list = []
-    for symbol, last_seen, always_update in scraper_input_list:
+    for symbol, last_seen, always_update, data in scraper_input_list:
         if always_update:
             temp_underlying_list.append(symbol)
         elif datetime.today() <= last_seen + timedelta(days=core.GRACE_PERIOD):
