@@ -72,8 +72,11 @@ class PipelineBuilder:
 
         current_time = datetime.now().time()
         last_scheduled_update = self.core.exp_update_timer - timedelta(days=1)
-        if (current_time < self.core.exp_update_timer.time() and self.core.exp_last_update < last_scheduled_update) or self.core.FORCE_EXP_UPDATE:
-            self.get_exp_options()
+        if (current_time < self.core.exp_update_timer.time() and self.core.exp_last_update < last_scheduled_update) or self.core.FORCE_EXP_UPDATE or self.core.FORCE_EXP_LOAD:
+            if self.core.FORCE_EXP_LOAD:
+                self.get_exp_options(force_load=True)
+            else:
+                self.get_exp_options()
 
         # elif datetime.today().weekday() in [5, 6]:
         #     'expired_option_contracts.pkl'
@@ -191,7 +194,7 @@ class PipelineBuilder:
 
         return sorted_contracts
 
-    def get_exp_options(self, force_update: bool = False):
+    def get_exp_options(self, force_update: bool = False, force_load: bool = False):
         """
         Retrieves expired option contracts from the database and updates the contract pool.
 
@@ -208,7 +211,7 @@ class PipelineBuilder:
             m_time = os.path.getmtime(self.core.EXP_OPT_FILE_NAME)
             weekend_cond = (datetime.today() - datetime.fromtimestamp(m_time)) <= timedelta(hours=60) and datetime.fromtimestamp(m_time).weekday() in [4, 5, 6]
             workday_cond = (datetime.today() - datetime.fromtimestamp(m_time)) <= timedelta(hours=18) and datetime.fromtimestamp(m_time).weekday() not in [4, 5, 6]
-            if weekend_cond or workday_cond:
+            if weekend_cond or workday_cond or force_load:
                 self.load_options_from_file(expired_list=True)
                 exp_options_loaded = True
 
@@ -243,7 +246,7 @@ class PipelineBuilder:
                         except TypeError:
                             tprint(f'No stock pricing data available for {stk_contract}.')
 
-                        for i, contract_batch in enumerate(batched(opt_contracts, n=2)):
+                        for i, contract_batch in enumerate(batched(opt_contracts, n=(len(opt_contracts) // 100) * 2 + 2)):
                             exp_order[i].extend(contract_batch)
                             for contract in contract_batch:
                                 for k in self.core.contract_pool['OPT'].keys():
