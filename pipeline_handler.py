@@ -50,25 +50,25 @@ class PipelineHandler:
                 while len(self.core.immediate_pool) == 0:
                     sleep(0.1)
 
-                contract_instance = self.core.immediate_pool[0]
-                last_update = contract_instance.get_last_update()
+                contract = self.core.immediate_pool[0]
+                last_update = self.db.get_last_update(contract_container=contract)
                 last_update = last_update if last_update else datetime(year=datetime.today().year - 2, month=1, day=1)
 
                 duration = max(floor((datetime.now() - last_update) / timedelta(days=7) + 1), 1)
 
                 if duration > 52:
-                    duration_str = f'{ceil(duration / 52)} Y'
+                    duration_str = f'{min(ceil(duration / 52), 2)} Y'
                 elif duration <= 52:
                     duration_str = f'{duration} W'
                 else:
                     raise Exception(f'Invalid duration: {duration}')
 
-                contract_instance.set_reqId_assign(self.core.reqId_2, reqType='reqHistData')
+                contract.set_reqId_assign(self.core.reqId_2, reqType='reqHistData')
                 query_time = datetime.today().strftime("%Y%m%d-%H:%M:%S")
 
                 self.core.last_request = datetime.now()
                 self.tws_con.reqHistoricalData(reqId=self.core.reqId_2,
-                                               contract=contract_instance.get_contract(),
+                                               contract=contract.get_contract(),
                                                endDateTime=query_time,
                                                durationStr=duration_str,
                                                barSizeSetting=self.core.CANDLE_LENGTH,
@@ -79,7 +79,7 @@ class PipelineHandler:
                                                chartOptions=[])
 
                 self.core.reqId_2 += 1
-                tprint(f'Requested: {contract_instance}: {last_update=}, {duration=}', debug=True)
+                tprint(f'Requested: {contract}: {last_update=}, {duration=}', debug=True)
 
                 timeout_secs = 60
                 for k in self.core.timeout_breaker.keys():
@@ -87,7 +87,7 @@ class PipelineHandler:
                         timeout_secs = self.core.timeout_breaker[k]
 
                 time_breaker = datetime.now() + timedelta(seconds=timeout_secs)
-                while not contract_instance.get_error_flag() and not contract_instance.get_historical_data_end() and datetime.now() < time_breaker:
+                while not contract.get_error_flag() and not contract.get_historical_data_end() and datetime.now() < time_breaker:
                     if not self.core.tws_con.isConnected():
                         while not self.tws_con.isConnected():
                             sleep(10)
@@ -95,15 +95,15 @@ class PipelineHandler:
                         break
                     sleep(.1)
 
-                if contract_instance.get_historical_data_end():
-                    self.core.writable_pool.append(contract_instance)
+                if contract.get_historical_data_end():
+                    self.core.writable_pool.append(contract)
                 self.core.immediate_pool.pop(0)
 
             except IndexError:
                 while len(self.core.immediate_pool) == 0:
                     sleep(.1)
-            except Exception as e:
-                tprint(f'Unhandled exception: {e} {traceback.format_exc()}', debug=True)
+            # except Exception as e:
+            #     tprint(f'Unhandled exception: {e} {traceback.format_exc()}', debug=True)
 
     def write_to_database(self):
         """
@@ -137,10 +137,7 @@ class PipelineHandler:
                     case _:
                         raise Exception(f'Invalid secType: {contract_instance.get_secType()}')
 
-                iq_header = f"""
-                            INSERT INTO [{contract_instance.get_database()}].[dbo].[{contract_instance.get_table()}] ({columns})
-                            VALUES
-                            """
+                iq_header = self.db.gen_insert_header(contract=contract_instance, columns=columns)
 
                 #Normalize requested price data for time offset
                 requested_pricing = {}
@@ -182,7 +179,8 @@ class PipelineHandler:
 
                     for i in range(ceil(len(iq_rows) / self.core.INSERT_QUERY_MAX_LINES)):
                         insert_query = iq_header + ','.join(str(x) for x in iq_rows[i * self.core.INSERT_QUERY_MAX_LINES:min(len(iq_rows), (i + 1) * self.core.INSERT_QUERY_MAX_LINES)]) + ';'
-                        self.db.write_price_data(query_string=insert_query)
+                        self.db.write_price_data(query_string=insert_query,
+                                                 database=contract_instance.get_database())
                 else:
                     if contract_instance.get_secType() == 'OPT':
                         contract = f'{contract_instance.get_symbol()} {contract_instance.get_secType()}'
@@ -199,4 +197,5 @@ class PipelineHandler:
                     sleep(.1)
 
             except Exception as e:
-                raise Exception(f'Unhandled exception {e}.')
+                print(Exception(f'Unhandled exception {e}.'))
+                self.core.writable_pool.pop(0)

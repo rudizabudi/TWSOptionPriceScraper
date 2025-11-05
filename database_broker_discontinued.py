@@ -14,10 +14,10 @@ class DatabaseBroker:
 
     def __init__(self):
 
-        core: Core = EnvDistributor.get_core()
+        self.core: Core = EnvDistributor.get_core()
 
-        self.connection_string = core.SQL_CONNECTION_STRING
-
+        connection_string: str = f'DRIVER=ODBC Driver 17 for SQL Server;SERVER={self.core.SQL_SERVER};UID={self.core.SQL_USER};PWD={self.core.SQL_PASSWORD}'
+        self.connection_string = connection_string
         self.table_structure = {}
 
         self.sql_ignore = ['master', 'tempdb', 'model', 'msdb']
@@ -45,8 +45,8 @@ class DatabaseBroker:
 
         return con_wrapper
 
-    @sql_query
-    def fetch_all_table_names(self, cursor: pyodbc.Cursor, db_name: str = None, return_data: bool = False, **kwargs) -> dict[str: None | dict[str, list[str]], str: bool]:
+    def get_all_table_names(self, cursor: pyodbc.Cursor, db_name: str = None, return_data: bool = False, **kwargs) ->\
+            dict[str: None | dict[str, list[str]], str: bool]:
         """
             Fetches the names of all tables in the database.
 
@@ -98,7 +98,7 @@ class DatabaseBroker:
          """
 
         if self.table_structure == {}:
-            self.fetch_all_table_names()
+            self.get_all_table_names()
 
         contract = contract_container.get_contract()
         match contract.secType:
@@ -115,17 +115,17 @@ class DatabaseBroker:
             if database_name not in self.table_structure.keys():
                 tprint(f'New database created: {database_name}')
                 self.create_database(db_name=database_name)
-                self.fetch_all_table_names(database=database_name)
+                self.get_all_table_names(database=database_name)
 
             if table_name not in self.table_structure[database_name]:
                 tprint(f'New table created: {table_name}.')
-                self.create_table(db_name=database_name, table_name=table_name)
-                self.fetch_all_table_names(database=database_name)
+                self.create_table(database=database_name, table=table_name)
+                self.get_all_table_names(database=database_name)
 
         return {'data': None, 'commit': False}
 
     @sql_query
-    def get_last_update(self, cursor: pyodbc.Cursor, contract_container: 'ContractContainer', **kwargs) -> dict[str: datetime, str: bool]:
+    def get_last_update(self, cursor: pyodbc.Cursor, contract: 'ContractContainer', **kwargs) -> dict[str: datetime, str: bool]:
         """
         Fetches the latest update from the database for a given contract.
 
@@ -160,7 +160,13 @@ class DatabaseBroker:
             case _:
                 raise KeyError('Security type not supported. Valid secTypes: STK, OPT')
 
-        cursor.execute(query)
+        while True:
+            try:
+                cursor.execute(query)
+                break
+            except pyodbc.ProgrammingError as e:
+                self.check_table_exists(contract_container=contract_container, create_missing=True)
+
         last_update = cursor.fetchone()
         last_update = last_update[0] if last_update is not None else None
 

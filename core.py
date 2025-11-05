@@ -31,8 +31,6 @@ class EnvDistributor:
             raise Exception('Core not set.')
         return cls.core
 
-
-
 class Core:
     #  General Settings:
     CANDLE_LENGTH: str = os.getenv('CANDLE_LENGTH')
@@ -51,8 +49,10 @@ class Core:
     CLIENT_ID: int = int(os.getenv('CLIENT_ID'))
 
     # Microsoft SQL Server credentials
+    SQL_TYPE: str = os.getenv('SQL_TYPE')  # PGSQL or MSSQL
     SQL_SERVER: str = os.getenv('SQL_SERVER')
     SQL_USER: str = os.getenv('SQL_USER')
+    SQL_PORT: str = os.getenv('SQL_PORT')
     SQL_PASSWORD: str = os.getenv('SQL_PASSWORD')
     SQL_CONNECTION_STRING: str = f'DRIVER={{ODBC Driver 17 for SQL Server}};SERVER={SQL_SERVER};UID={SQL_USER};PWD={SQL_PASSWORD}'
 
@@ -82,7 +82,7 @@ class Core:
     JSON_SESSION_FILE_NAME: str = 'session_data.json'
 
     FORCE_EXP_UPDATE: bool = False  # force update of expired options on startup
-
+    FORCE_EXP_LOAD: bool = False
     # Initialization of shared variable space.
     reqId_hashmap: dict[int: Callable] = {}
     reqId_1: int = 1

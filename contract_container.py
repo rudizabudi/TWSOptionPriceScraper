@@ -17,7 +17,6 @@ class ContractContainer:
     def __init__(self, **kwargs):
 
         self.core: Core = EnvDistributor.get_core()
-        self.db: DatabaseBroker = DatabaseBroker()
 
         stk_cond: bool = all([x in kwargs.keys() for x in ['symbol', 'secType']])
         opt_cond: bool = all([x in kwargs.keys() for x in ['symbol', 'secType', 'strike', 'right', 'lastTradeDateOrContractMonth']])
@@ -161,13 +160,6 @@ class ContractContainer:
     def register_derivative_child(self, child: "ContractContainer", ** kwargs) -> NoReturn:
         self.child_container.append(child)
 
-    def get_last_update(self, response: bool = True, ** kwargs) -> datetime | NoReturn:
-        if not self.last_update:
-            self.last_update = self.db.get_last_update(contract_container=self)
-        if response:
-            return self.last_update
-        return None
-
     def get_database(self, ** kwargs) -> str:
         match self.contract.secType:
             case 'STK':
@@ -192,9 +184,6 @@ class ContractContainer:
     def set_error_flag(self, flag: bool = False, **kwargs) -> NoReturn:
         #print(f'Error flag set for {self.contract.symbol}.')
         self.error_flag = flag
-
-    def get_last_price(self, **kwargs) -> float:
-        return self.db.get_last_price(stk_symbol=self.get_symbol())
 
     def set_historical_data_end(self, flag: bool = False, **kwargs) -> NoReturn:
         self.historical_data_end = flag

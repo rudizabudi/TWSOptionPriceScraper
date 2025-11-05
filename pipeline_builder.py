@@ -76,7 +76,7 @@ class PipelineBuilder:
             if self.core.FORCE_EXP_LOAD:
                 self.get_exp_options(force_load=True)
             else:
-                self.get_exp_options()
+                self.get_exp_options(force_update=True)
 
         # elif datetime.today().weekday() in [5, 6]:
         #     'expired_option_contracts.pkl'
@@ -156,7 +156,7 @@ class PipelineBuilder:
                     stk.register_derivative_child(opt)
 
             if opt:
-                self.db.check_table_exists(contract_container=opt)
+                self.db.check_existence(contract_container=opt, create_missing=True)
             else:
                 tprint(f'Could not check if table exists for {stk.get_symbol()} OPT on {expiry}.')
 
@@ -164,8 +164,8 @@ class PipelineBuilder:
             return opt_contracts
 
         sorted_contracts = {}
-        self.db.check_table_exists(contract_container=stk)
-        if not (current_stk_price := stk.get_last_price()):
+        self.db.check_existence(contract_container=stk, create_missing=True)
+        if not (current_stk_price := self.db.get_last_price(symbol=stk.get_symbol())):
             current_stk_price = 10
 
         for opt_contract in opt_contracts:
@@ -222,12 +222,14 @@ class PipelineBuilder:
             tprint('Getting expired option contracts...')
             start = 0 if datetime.now().time() > time(22, 00) else 1
             expiries = [datetime.today().date() - timedelta(days=x) for x in range(start, self.core.EXPIRED_OPT_DAYS + 1)]
-            table_structure = self.db.fetch_all_table_names(return_data=True)
+            table_structure = self.db.get_all_table_names()
             databases = set(map(lambda x: f'Data_OPT_{x.strftime('%b%y')}', expiries))
+
+            normalized_ts_keys = {k.lower(): k for k in table_structure.keys()}
 
             expired_tables = {}
             for database in databases:
-                for table in table_structure[database]:
+                for table in table_structure.get(normalized_ts_keys[database.lower()], []):
                     if datetime.strptime(table.split('_')[2], '%d%b%y').date() in expiries:
                         expired_tables[table] = None
 
@@ -235,12 +237,13 @@ class PipelineBuilder:
             for table in expired_tables.keys():
                 #last_price = self.db.get_last_price(stk_symbol=table.split('_')[0])
                 try:
-                    stk_contract = list(filter(lambda x: x.get_symbol() == table.split('_')[0] and x.get_secType() == 'STK', self.core.contract_pool['STK']))[0]
+                    stk_contract = list(filter(lambda x: x.get_symbol().lower() == table.split('_')[0].lower() and x.get_secType() == 'STK', self.core.contract_pool['STK']))[0]
+
                     if stk_contract is not None:
                         expiry = datetime.strptime(table.split('_')[2], '%d%b%y').date().strftime('%Y%m%d')
                         opt_contracts = self.build_opt_contracts(stk=stk_contract, expiry=expiry)
 
-                        underlying_last_price = stk_contract.get_last_price()
+                        underlying_last_price = self.db.get_last_price(symbol=stk_contract.get_symbol())
                         try:
                             opt_contracts = sorted(opt_contracts, key=lambda x: abs(underlying_last_price - x.get_strike()))
                         except TypeError:
@@ -297,11 +300,11 @@ class PipelineBuilder:
 
                 if len(self.core.contract_pool['EXP']) > 0:
                     tprint(f'EXP Option condition met.', debug=True)
-                    last_update = self.db.get_last_update(contract_container=self.core.contract_pool['EXP'][0], response=True)
+                    last_update = self.db.get_last_update(contract_container=self.core.contract_pool['EXP'][0])
                     expiry = self.core.contract_pool['EXP'][0].get_expiry(dt_object=True)
 
                     if (last_update and last_update < expiry + timedelta(hours=21, minutes=45)) or not last_update:
-                        self.db.check_table_exists(contract_container=self.core.contract_pool['EXP'][0], create_missing=True)
+                        self.db.check_existence(contract_container=self.core.contract_pool['EXP'][0], create_missing=True)
                         self.core.immediate_pool.append(self.core.contract_pool['EXP'].pop(0))
                         tprint(f'EXP Option added to immediate pool.', debug=True)
 
@@ -324,7 +327,7 @@ class PipelineBuilder:
                 elif len(self.core.contract_pool['STK'][self.stk_sorter_pointer:]) > 0:
                     tprint(f'STK condition met.', debug=True)
 
-                    self.db.check_table_exists(contract_container=self.core.contract_pool['STK'][self.stk_sorter_pointer], create_missing=True)
+                    self.db.check_existence(contract_container=self.core.contract_pool['STK'][self.stk_sorter_pointer], create_missing=True)
                     self.core.immediate_pool.append(self.core.contract_pool['STK'][self.stk_sorter_pointer])
                     #self.core.immediate_pool.append(self.core.contract_pool['STK'].pop(0))
                     self.stk_sorter_pointer += 1
@@ -342,8 +345,8 @@ class PipelineBuilder:
                             rand_key = k
                             break
 
-                    self.db.check_table_exists(contract_container=self.core.contract_pool['OPT'][rand_key][0], create_missing=True)
-                    last_update = self.db.get_last_update(contract_container=self.core.contract_pool['OPT'][rand_key][0], response=True)
+                    self.db.check_existence(contract_container=self.core.contract_pool['OPT'][rand_key][0], create_missing=True)
+                    last_update = self.db.get_last_update(contract_container=self.core.contract_pool['OPT'][rand_key][0])
                     expiry = self.core.contract_pool['OPT'][rand_key][0].get_expiry(dt_object=True)
 
                     if expiry > datetime.now():
@@ -417,9 +420,13 @@ class PipelineBuilder:
                             case 'expired':
                                 for contract in contract_list:
                                     contract.disconnect_core_space()
-
-                                pickle.dump(contract_list, file)
-                                tprint(f'{len(contract_list):,} {type_name} options saved to {file_name}.')
+                                
+                                try:
+                                    pickle.dump(contract_list, file)
+                                    list_length = len(self.core.contract_pool['EXP'])
+                                    tprint(f'{list_length:,} options saved to {file_name}.')
+                                except TypeError:
+                                    tprint(f'Failed to save {type_name} options. Skipping...')
 
                                 for contract in contract_list:
                                     contract.connect_core_space(self.core)
@@ -430,9 +437,25 @@ class PipelineBuilder:
                                     for contract in sublist:
                                         contract.disconnect_core_space()
 
-                                pickle.dump(contract_list, file)
+                                try:
+                                    pickle.dump(contract_list, file)
+                                    list_length = sum(len(x) for x in self.core.contract_pool['OPT'].values())
+                                    tprint(f'{list_length:,} options saved to {file_name}.')
+                                except TypeError:
+                                    tprint(f'Failed to save {type_name} options. Skipping...')
+                                    for prio in self.core.contract_pool['OPT'].keys():
+                                        print(self.core.contract_pool['OPT'][prio][:10])
 
-                                tprint(f'{len(contract_list):,} {type_name} options saved to {file_name}.')
+                                        for contract in self.core.contract_pool['OPT'][prio]:
+                                            print(contract)
+                                            for name, value in contract.__dict__.items():
+                                                try:
+                                                    pickle.dumps(value)
+                                                except Exception as e:
+                                                    print(f"Save Exception {name}: {e}")
+                                                    print(contract.__dict__)
+                                                    print(contract['db'])
+
 
                                 for k, sublist in contract_list.items():
                                     for contract in sublist:
@@ -463,7 +486,11 @@ class PipelineBuilder:
 
         for type_name, file_name, contract_list in selection_list:
             with open(file_name, 'rb') as f:
-                contract_data = pickle.load(f)
+                try:
+                    contract_data = pickle.load(f)
+                except EOFError:
+                    tprint(f'{type_name.capitalize()} option file is empty. Skipping...')
+                    continue
 
             match type_name:
                 case 'expired':
@@ -487,3 +514,4 @@ class PipelineBuilder:
                         self.core.contract_pool[contract_list][k] = contract_data[k]
 
                     tprint(f'{type_name.capitalize()} contracts loaded and reconnected to Core space.')
+
