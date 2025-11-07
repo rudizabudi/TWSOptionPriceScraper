@@ -384,8 +384,9 @@ class PGSQL(SQL):
         try:
             last_update = self.cursor.fetchone()
         except psycopg2.ProgrammingError:
-            print('Error Programming Error.')
+            print('Programming Error.')
             print(f'{self.active_database}')
+            print(f'{query=}')
             return None
         except errors.InFailedSqlTransaction as e:
             print('Error InFailedSqlTransaction.')
@@ -427,6 +428,7 @@ class PGSQL(SQL):
     def write_price_data(self, insert_query: str, database: str):
         #self.switch_schema(schema=database)
         self.cursor.execute(insert_query)
+        self.con.commit()
 
     def get_existing_dates(self, database: str, table: str, sec_type: str, strike: float = None, right: str = None) -> \
     set[datetime]:
